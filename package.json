@@ -9,6 +9,11 @@
   "dependencies": {
     "@browserbasehq/stagehand": "^2.5.2",
     "@onkernel/sdk": "^0.15.0",
+    "playwright": "^1.49.1",
+    "p-timeout": "^6.1.3",
     "zod": "^3.25.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2"
   }
 }

@@ -1,5 +1,8 @@
 import { Stagehand } from "@browserbasehq/stagehand";
 import client, { Kernel, type KernelContext } from '@onkernel/sdk';
+import { chromium } from 'playwright';
+import fs from 'fs';
+import pTimeout from 'p-timeout';
 
 const kernel = new Kernel({
   apiKey: process.env.KERNEL_API_KEY
@@ -7,9 +10,12 @@ const kernel = new Kernel({
 
 const app = kernel.app('ts-stagehand-google-cua-agent');
 
+const DOWNLOAD_DIR = '/tmp/downloads';
+
 interface SearchQueryOutput {
   success: boolean;
   result: string;
+  downloadedFile?: string;
 }
 
 // API Keys for LLM providers
@@ -51,6 +57,41 @@ async function runStagehandTask(invocationId?: string): Promise<SearchQueryOutpu
 
   console.log("Kernel browser live view url: ", kernelBrowser.browser_live_view_url);
 
+  // Step 2: Set up download directory using CDP
+  console.log('Configuring download directory...');
+  const browser = await chromium.connectOverCDP(kernelBrowser.cdp_ws_url);
+  const context = browser.contexts()[0] || (await browser.newContext());
+  const page = context.pages()[0] || (await context.newPage());
+
+  const cdpClient = await context.newCDPSession(page);
+  await cdpClient.send('Browser.setDownloadBehavior', {
+    behavior: 'allow',
+    downloadPath: DOWNLOAD_DIR,
+    eventsEnabled: true,
+  });
+
+  // Set up CDP listeners to capture download filename and completion
+  let downloadFilename: string | undefined;
+  let downloadCompletedResolve!: () => void;
+  const downloadCompleted = new Promise<void>((resolve) => {
+    downloadCompletedResolve = resolve;
+  });
+
+  cdpClient.on('Browser.downloadWillBegin', (event: any) => {
+    downloadFilename = event.suggestedFilename ?? 'unknown';
+    console.log('Download started:', downloadFilename);
+  });
+
+  cdpClient.on('Browser.downloadProgress', (event: any) => {
+    if (event.state === 'completed' || event.state === 'canceled') {
+      console.log('Download state:', event.state);
+      downloadCompletedResolve();
+    }
+  });
+
+  // Close the Playwright connection, but keep the browser running for Stagehand
+  await browser.close();
+
   const stagehand = new Stagehand({
     env: "LOCAL",
     verbose: 1,
@@ -66,27 +107,28 @@ async function runStagehandTask(invocationId?: string): Promise<SearchQueryOutpu
   await stagehand.init();
 
   /////////////////////////////////////
-  // Your Stagehand implementation here
+  // Step 3: Run Gemini CUA to download file
   /////////////////////////////////////
   try {
-    const page = stagehand.page;
+    const stagePage = stagehand.page;
 
     const agent = stagehand.agent({
       provider: "google",
       model: "gemini-2.5-computer-use-preview-10-2025",
       instructions: `You are a helpful assistant that can use a web browser.
-      You are currently on the following page: ${page.url()}.
+      You are currently on the following page: ${stagePage.url()}.
       Do not ask follow up questions, the user will trust your judgement.`,
       options: {
         apiKey: GOOGLE_API_KEY,
       }
     });
 
-    // Navigate to YCombinator's website
-    await page.goto("https://www.ycombinator.com/companies");
+    // Navigate to a test page with downloadable PDFs
+    await stagePage.goto("https://dvins.com/Group.htm");
 
     // Define the instructions for the CUA agent
-    const instruction = "Find Kernel's company page on the YCombinator website and write a blog post about their product offering.";
+    // Example: Download a PDF or file from the page
+    const instruction = "Download the combined Dental and Vision Plan Presentation packet";
 
     // Execute the instruction
     const result = await agent.execute({
@@ -94,12 +136,49 @@ async function runStagehandTask(invocationId?: string): Promise<SearchQueryOutpu
       maxSteps: 20,
     });
 
-    console.log("result: ", result);
+    console.log("Agent result: ", result);
+
+    // Step 4: Wait for download to complete and stream file back to local machine
+    let localFilePath: string | undefined;
+    
+    try {
+      console.log('Waiting for download to complete...');
+      await pTimeout(downloadCompleted, {
+        milliseconds: 30_000,
+        message: new Error('Download timed out after 30 seconds'),
+      });
+      console.log('Download completed successfully');
+
+      if (!downloadFilename) {
+        throw new Error('Unable to determine download filename');
+      }
+
+      const remotePath = `${DOWNLOAD_DIR}/${downloadFilename}`;
+      console.log(`Reading file from Kernel VM: ${remotePath}`);
+
+      const resp = await kernel.browsers.fs.readFile(kernelBrowser.session_id, {
+        path: remotePath,
+      });
+
+      const bytes = await resp.bytes();
+      fs.mkdirSync('downloads', { recursive: true });
+      localFilePath = `downloads/${downloadFilename}`;
+      fs.writeFileSync(localFilePath, bytes);
+      console.log(`File saved locally to: ${localFilePath}`);
+    } catch (downloadError) {
+      console.warn('No file was downloaded or download timed out:', downloadError);
+      // Continue execution even if download fails
+    }
 
     console.log("Deleting browser and closing stagehand...");
     await stagehand.close();
     await kernel.browsers.deleteByID(kernelBrowser.session_id);
-    return { success: true, result: result.message };
+    
+    return { 
+      success: true, 
+      result: result.message,
+      downloadedFile: localFilePath
+    };
   } catch (error) {
     console.error(error);
     console.log("Deleting browser and closing stagehand...");
