@@ -1,210 +1,130 @@
 import { Stagehand } from "@browserbasehq/stagehand";
-import client, { Kernel, type KernelContext } from '@onkernel/sdk';
-import { chromium } from 'playwright';
-import fs from 'fs';
-import pTimeout from 'p-timeout';
+import { Kernel, type KernelContext } from '@onkernel/sdk';
 
-const kernel = new Kernel({
-  apiKey: process.env.KERNEL_API_KEY
-});
+const kernel = new Kernel();
 
-const app = kernel.app('ts-stagehand-google-cua-agent');
+const app = kernel.app('ts-stagehand-bb');
 
-const DOWNLOAD_DIR = '/tmp/downloads';
-
-interface SearchQueryOutput {
-  success: boolean;
-  result: string;
-  downloadedFile?: string;
+interface SearchQueryInput {
+    query: string;
 }
 
-// API Keys for LLM providers
-// - GOOGLE_API_KEY: Required for Gemini 2.5 Computer Use Agent
-// - OPENAI_API_KEY: Required for Stagehand's GPT-4o model
-// Set via environment variables or `kernel deploy <filename> --env-file .env`
-// See https://docs.onkernel.com/launch/deploy#environment-variables
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+interface SearchQueryOutput {
+    pdfUrl: string;
+    filename: string;
+    remotePath: string;
+    session_id: string;
+}
+
+// LLM API Keys are set in the environment during `kernel deploy <filename> -e OPENAI_API_KEY=XXX`
+// See https://www.onkernel.com/docs/apps/deploy#environment-variables
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+const DOWNLOAD_DIR = '/tmp/downloads';
 
 if (!OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY is not set');
+    throw new Error('OPENAI_API_KEY is not set');
 }
 
 if (!GOOGLE_API_KEY) {
-  throw new Error('GOOGLE_API_KEY is not set');
+    throw new Error('GOOGLE_API_KEY is not set');
 }
 
-async function runStagehandTask(invocationId?: string): Promise<SearchQueryOutput> {
-  // Executes a Computer Use Agent (CUA) task using Gemini 2.5 and Stagehand
-  //
-  // This function supports dual execution modes:
-  // - Action Handler Mode: Called with invocation_id from Kernel app action context
-  // - Local Mode: Called without invocation_id for direct script execution
-  //
-  // Args:
-  //     invocationId: Optional Kernel invocation ID to associate browser with action
-  //
-  // App Actions Returns:
-  //     SearchQueryOutput: Success status and result message from the agent
-  // Local Execution Returns:
-  //     Logs the result of the agent execution
+app.action<SearchQueryInput, SearchQueryOutput>(
+    'headcount-task',
+    async (ctx: KernelContext, payload?: SearchQueryInput): Promise<SearchQueryOutput> => {
 
-  const browserOptions = invocationId
-    ? { invocation_id: invocationId, stealth: true }
-    : { stealth: true };
+        const query = payload?.query || 'kernel';
 
-  const kernelBrowser = await kernel.browsers.create(browserOptions);
+        const kernelBrowser = await kernel.browsers.create({
+            invocation_id: ctx.invocation_id,
+            stealth: true,
+            viewport: {
+                width: 1440,
+                height: 900,
+            },
+        });
 
-  console.log("Kernel browser live view url: ", kernelBrowser.browser_live_view_url);
+        console.log("Kernel browser live view url: ", kernelBrowser.browser_live_view_url);
 
-  // Step 2: Set up download directory using CDP
-  console.log('Configuring download directory...');
-  const browser = await chromium.connectOverCDP(kernelBrowser.cdp_ws_url);
-  const context = browser.contexts()[0] || (await browser.newContext());
-  const page = context.pages()[0] || (await context.newPage());
+        const stagehand = new Stagehand({
+            env: "LOCAL",
+            localBrowserLaunchOptions: {
+                cdpUrl: kernelBrowser.cdp_ws_url,
+            },
+            model: "openai/gpt-4.1",
+            apiKey: OPENAI_API_KEY,
+            verbose: 1,
+            domSettleTimeout: 30_000
+        });
+        await stagehand.init();
 
-  const cdpClient = await context.newCDPSession(page);
-  await cdpClient.send('Browser.setDownloadBehavior', {
-    behavior: 'allow',
-    downloadPath: DOWNLOAD_DIR,
-    eventsEnabled: true,
-  });
+        /////////////////////////////////////
+        // Your Stagehand implementation here
+        /////////////////////////////////////
+        const page = stagehand.context.pages()[0];
+        await page.goto("https://dvins.com/Group.htm");
 
-  // Set up CDP listeners to capture download filename and completion
-  let downloadFilename: string | undefined;
-  let downloadCompletedResolve!: () => void;
-  const downloadCompleted = new Promise<void>((resolve) => {
-    downloadCompletedResolve = resolve;
-  });
-
-  cdpClient.on('Browser.downloadWillBegin', (event: any) => {
-    downloadFilename = event.suggestedFilename ?? 'unknown';
-    console.log('Download started:', downloadFilename);
-  });
-
-  cdpClient.on('Browser.downloadProgress', (event: any) => {
-    if (event.state === 'completed' || event.state === 'canceled') {
-      console.log('Download state:', event.state);
-      downloadCompletedResolve();
-    }
-  });
-
-  // Close the Playwright connection, but keep the browser running for Stagehand
-  await browser.close();
-
-  const stagehand = new Stagehand({
-    env: "LOCAL",
-    verbose: 1,
-    domSettleTimeoutMs: 30_000,
-    modelName: "gpt-4o",
-    modelClientOptions: {
-      apiKey: OPENAI_API_KEY
-    },
-    localBrowserLaunchOptions: {
-      cdpUrl: kernelBrowser.cdp_ws_url
-    }
-  });
-  await stagehand.init();
-
-  /////////////////////////////////////
-  // Step 3: Run Gemini CUA to download file
-  /////////////////////////////////////
-  try {
-    const stagePage = stagehand.page;
-
-    const agent = stagehand.agent({
-      provider: "google",
-      model: "gemini-2.5-computer-use-preview-10-2025",
-      instructions: `You are a helpful assistant that can use a web browser.
-      You are currently on the following page: ${stagePage.url()}.
+        // Create Gemini CUA agent
+        const agent = stagehand.agent({
+            model: {
+                modelName: "google/gemini-2.5-computer-use-preview-10-2025",
+                apiKey: GOOGLE_API_KEY,
+            },
+            cua: true,
+            systemPrompt: `You are a helpful assistant that can use a web browser.
+      You are currently on the following page: ${page.url()}.
       Do not ask follow up questions, the user will trust your judgement.`,
-      options: {
-        apiKey: GOOGLE_API_KEY,
-      }
-    });
+        });
 
-    // Navigate to a test page with downloadable PDFs
-    await stagePage.goto("https://dvins.com/Group.htm");
+        // Use agent to click the PDF link
+        const instruction = `Click the link containing the text "Click here for a combined Dental and Vision Plan Presentation packet showing all of our plans". This will navigate to the PDF page.`;
 
-    // Define the instructions for the CUA agent
-    // Example: Download a PDF or file from the page
-    const instruction = "Download the combined Dental and Vision Plan Presentation packet";
+        console.log('Executing agent to click PDF link...');
+        await agent.execute({
+            instruction,
+            maxSteps: 20,
+        });
+        console.log('Agent completed. PDF opened in new tab.');
 
-    // Execute the instruction
-    const result = await agent.execute({
-      instruction,
-      maxSteps: 20,
-    });
+        // Get the active page (the newly opened PDF tab)
+        const pdfPage = stagehand.context.activePage();
+        if (!pdfPage) {
+            throw new Error('No active page found after agent execution');
+        }
+        const pdfUrl = pdfPage.url();
+        console.log('PDF URL:', pdfUrl);
 
-    console.log("Agent result: ", result);
+        // Download the PDF using page evaluation with fetch
+        console.log('Downloading PDF...');
+        const buffer = await pdfPage.evaluate(async (url: string) => {
+            const response = await fetch(url);
+            const arrayBuffer = await response.arrayBuffer();
+            return Array.from(new Uint8Array(arrayBuffer));
+        }, pdfUrl);
 
-    // Step 4: Wait for download to complete and stream file back to local machine
-    let localFilePath: string | undefined;
-    
-    try {
-      console.log('Waiting for download to complete...');
-      await pTimeout(downloadCompleted, {
-        milliseconds: 30_000,
-        message: new Error('Download timed out after 30 seconds'),
-      });
-      console.log('Download completed successfully');
+        // Extract filename from URL
+        const filename = pdfUrl.split('/').pop() || 'download.pdf';
+        const remotePath = `${DOWNLOAD_DIR}/${filename}`;
+        console.log('Remote path:', remotePath);
 
-      if (!downloadFilename) {
-        throw new Error('Unable to determine download filename');
-      }
+        // Write the PDF to Kernel's remote filesystem
+        console.log('Writing file to remote filesystem...');
+        const bufferData = Buffer.from(buffer);
+        await kernel.browsers.fs.writeFile(
+            kernelBrowser.session_id,
+            bufferData,
+            { path: remotePath }
+        );
 
-      const remotePath = `${DOWNLOAD_DIR}/${downloadFilename}`;
-      console.log(`Reading file from Kernel VM: ${remotePath}`);
+        // Return information for the local client to download the file
+        console.log('PDF downloaded to remote filesystem. Return session info for local client.');
 
-      const resp = await kernel.browsers.fs.readFile(kernelBrowser.session_id, {
-        path: remotePath,
-      });
-
-      const bytes = await resp.bytes();
-      fs.mkdirSync('downloads', { recursive: true });
-      localFilePath = `downloads/${downloadFilename}`;
-      fs.writeFileSync(localFilePath, bytes);
-      console.log(`File saved locally to: ${localFilePath}`);
-    } catch (downloadError) {
-      console.warn('No file was downloaded or download timed out:', downloadError);
-      // Continue execution even if download fails
-    }
-
-    console.log("Deleting browser and closing stagehand...");
-    await stagehand.close();
-    await kernel.browsers.deleteByID(kernelBrowser.session_id);
-    
-    return { 
-      success: true, 
-      result: result.message,
-      downloadedFile: localFilePath
-    };
-  } catch (error) {
-    console.error(error);
-    console.log("Deleting browser and closing stagehand...");
-    await stagehand.close();
-    await kernel.browsers.deleteByID(kernelBrowser.session_id);
-    return { success: false, result: "" };
-  }
-}
-
-// Register Kernel action handler for remote invocation
-// Invoked via: kernel invoke ts-stagehand-google-cua-agent google-cua-agent-task
-app.action<void, SearchQueryOutput>(
-  'google-cua-agent-task',
-  async (ctx: KernelContext): Promise<SearchQueryOutput> => {
-    return runStagehandTask(ctx.invocation_id);
-  },
+        return {
+            pdfUrl,
+            filename,
+            remotePath,
+            session_id: kernelBrowser.session_id
+        };
+    },
 );
-
-// Run locally if executed directly (not imported as a module)
-// Execute via: npx tsx index.ts
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runStagehandTask().then(result => {
-    console.log('Local execution result:', result);
-    process.exit(result.success ? 0 : 1);
-  }).catch(error => {
-    console.error('Local execution failed:', error);
-    process.exit(1);
-  });
-}
