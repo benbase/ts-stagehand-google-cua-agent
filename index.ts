@@ -5,18 +5,20 @@ const kernel = new Kernel();
 
 const app = kernel.app('ts-stagehand-bb');
 
-interface SearchQueryInput {
-    query: string;
+interface DownloadTaskInput {
+    url: string;
+    instruction: string;
+    maxSteps: number;
 }
 
-interface SearchQueryOutput {
+interface DownloadTaskOutput {
     pdfUrl: string;
     filename: string;
     remotePath: string;
     session_id: string;
 }
 
-// LLM API Keys are set in the environment during `kernel deploy <filename> -e OPENAI_API_KEY=XXX`
+// LLM API Keys are set in the environment during `kernel deploy index.ts --env-file .env`
 // See https://www.onkernel.com/docs/apps/deploy#environment-variables
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
@@ -30,11 +32,21 @@ if (!GOOGLE_API_KEY) {
     throw new Error('GOOGLE_API_KEY is not set');
 }
 
-app.action<SearchQueryInput, SearchQueryOutput>(
-    'headcount-task',
-    async (ctx: KernelContext, payload?: SearchQueryInput): Promise<SearchQueryOutput> => {
+app.action<DownloadTaskInput, DownloadTaskOutput>(
+    'download-task',
+    async (ctx: KernelContext, payload?: DownloadTaskInput): Promise<DownloadTaskOutput> => {
 
-        const query = payload?.query || 'kernel';
+        const url = payload?.url
+        const instruction = payload?.instruction
+        const maxSteps = payload?.maxSteps
+
+        if (!url || !instruction || !maxSteps) {
+            throw new Error('url, instruction, and maxSteps are required');
+        }
+
+        console.log('url:', url);
+        console.log('instruction:', instruction);
+        console.log('maxSteps:', maxSteps);
 
         const kernelBrowser = await kernel.browsers.create({
             invocation_id: ctx.invocation_id,
@@ -63,7 +75,7 @@ app.action<SearchQueryInput, SearchQueryOutput>(
         // Your Stagehand implementation here
         /////////////////////////////////////
         const page = stagehand.context.pages()[0];
-        await page.goto("https://dvins.com/Group.htm");
+        await page.goto(url);
 
         // Create Gemini CUA agent
         const agent = stagehand.agent({
@@ -78,12 +90,11 @@ app.action<SearchQueryInput, SearchQueryOutput>(
         });
 
         // Use agent to click the PDF link
-        const instruction = `Click the link containing the text "Click here for a combined Dental and Vision Plan Presentation packet showing all of our plans". This will navigate to the PDF page.`;
-
+        
         console.log('Executing agent to click PDF link...');
         await agent.execute({
             instruction,
-            maxSteps: 20,
+            maxSteps
         });
         console.log('Agent completed. PDF opened in new tab.');
 
