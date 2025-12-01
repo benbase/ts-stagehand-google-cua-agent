@@ -1,3 +1,8 @@
-{"url": "https://business.kaiserpermanente.org/california/broker",
-"instruction": "Our goal is to download the November invoice for the Small Business Client with Group ID 738001 \n - First Sign In with the login credentials username benbasemw and password UFgDKa!WdCfN9*6E3fpXwybV \n - Then navigate to Book of Business and find the Small Business Client with Group ID 738001 and navigate to the documents page \n - Then on the documents page click on the invoices link and then find the November invoice on the invoices page and click the PDF link to download the invoice. \n Note: if you encounter any popups, you should close them, accept any cookie requests, and don't worry about any BAA agreement prompts",
-"maxSteps": 25}
+{
+  "url": "https://business.kaiserpermanente.org/california/broker",
+  "instruction": "Our goal is to download the November 2025 invoice for the Small Business Client with Group ID {{GROUP_ID}} \n - First Sign In with the login credentials username {{USERNAME}} and password {{PASSWORD}} \n - Then navigate to Book of Business and find the Small Business Client with Group ID {{GROUP_ID}} and navigate to the documents page \n - Then on the documents page click on the invoices link and then find the November invoice on the invoices page and click the PDF link to download the invoice (No need to filter by date, check directly on the page for the date). After clicking the download link, stay on the invoices page - the download will happen automatically in the background. \n Note: if you encounter any popups, you should close them, accept any cookie requests, and don't worry about any BAA agreement prompts",
+  "maxSteps": 35,
+  "model": "openai/gpt-4.1",
+  "agentModel": "google/gemini-2.5-computer-use-preview-10-2025",
+  "systemPrompt": "You are a helpful assistant that can use a web browser. Do not ask follow up questions, the user will trust your judgement."
+}

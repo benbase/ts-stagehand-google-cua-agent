@@ -6,9 +6,12 @@ const kernel = new Kernel();
 const app = kernel.app('ts-stagehand-bb');
 
 interface DownloadTaskInput {
-    url: string;
-    instruction: string;
-    maxSteps: number;
+    url: string; // Target URL to navigate to
+    instruction: string; // Task instructions for the agent to execute (credentials are injected by the client)
+    maxSteps: number; // Maximum number of steps the agent can take
+    model?: string; // Stagehand model for DOM analysis and element extraction
+    agentModel?: string; // Computer Use Agent model for executing task instructions
+    systemPrompt?: string; // System prompt for the Computer Use Agent
 }
 
 interface DownloadTaskOutput {
@@ -39,6 +42,12 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         const url = payload?.url
         const instruction = payload?.instruction
         const maxSteps = payload?.maxSteps
+        // Stagehand model: used for DOM analysis and element extraction
+        const model = payload?.model || "openai/gpt-4.1"
+        // Agent model: used for executing task instructions via Computer Use Agent
+        const agentModel = payload?.agentModel || "google/gemini-2.5-computer-use-preview-10-2025"
+        // System prompt: guides the agent's behavior
+        const systemPrompt = payload?.systemPrompt || "You are a helpful assistant that can use a web browser. Do not ask follow up questions, the user will trust your judgement."
 
         if (!url || !instruction || !maxSteps) {
             throw new Error('url, instruction, and maxSteps are required');
@@ -47,6 +56,8 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         console.log('url:', url);
         console.log('instruction:', instruction);
         console.log('maxSteps:', maxSteps);
+        console.log('stagehand model:', model);
+        console.log('agent model:', agentModel);
 
         const kernelBrowser = await kernel.browsers.create({
             invocation_id: ctx.invocation_id,
@@ -64,7 +75,7 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
             localBrowserLaunchOptions: {
                 cdpUrl: kernelBrowser.cdp_ws_url,
             },
-            model: "openai/gpt-4.1",
+            model,
             apiKey: OPENAI_API_KEY,
             verbose: 1,
             domSettleTimeout: 30_000
@@ -72,68 +83,83 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         await stagehand.init();
 
         /////////////////////////////////////
-        // Your Stagehand implementation here
+        // Stagehand implementation
         /////////////////////////////////////
         const page = stagehand.context.pages()[0];
+        if (!page) {
+            throw new Error('No page found in browser context');
+        }
+
         await page.goto(url);
 
-        // Create Gemini CUA agent
+        // List files in download directory before agent execution
+        let filesBefore: string[] = [];
+        try {
+            const listResult = await kernel.browsers.fs.listFiles(kernelBrowser.session_id, { path: DOWNLOAD_DIR });
+            filesBefore = listResult.map((f) => f.name);
+            console.log('Files before download:', filesBefore);
+        } catch (error) {
+            console.log('Download directory does not exist yet or is empty');
+        }
+
+        // Create Computer Use Agent
         const agent = stagehand.agent({
             model: {
-                modelName: "google/gemini-2.5-computer-use-preview-10-2025",
+                modelName: agentModel,
                 apiKey: GOOGLE_API_KEY,
             },
             cua: true,
-            systemPrompt: `You are a helpful assistant that can use a web browser.
-      You are currently on the following page: ${page.url()}.
-      Do not ask follow up questions, the user will trust your judgement.`,
+            systemPrompt: `${systemPrompt}\n\nYou are currently on the following page: ${page.url()}.`,
         });
 
         // Use agent to click the PDF link
-        
         console.log('Executing agent to click PDF link...');
         await agent.execute({
             instruction,
             maxSteps
         });
-        console.log('Agent completed. PDF opened in new tab.');
+        console.log('Agent completed.');
 
-        // Get the active page (the newly opened PDF tab)
-        const pdfPage = stagehand.context.activePage();
-        if (!pdfPage) {
-            throw new Error('No active page found after agent execution');
+        // Wait and check for new files in download directory
+        let newFilename: string | null = null;
+        let attempts = 0;
+        const maxAttempts = 20; // Wait up to 20 seconds
+
+        while (!newFilename && attempts < maxAttempts) {
+            console.log(`Checking for downloaded files (attempt ${attempts + 1}/${maxAttempts})...`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            try {
+                const listResult = await kernel.browsers.fs.listFiles(kernelBrowser.session_id, { path: DOWNLOAD_DIR });
+                const filesAfter = listResult.map((f) => f.name);
+
+                // Find new files
+                const newFiles = filesAfter.filter((f) => !filesBefore.includes(f));
+                if (newFiles.length > 0 && newFiles[0]) {
+                    newFilename = newFiles[0]; // Take the first new file
+                    console.log('New file detected:', newFilename);
+                    break;
+                }
+            } catch (error) {
+                console.log('Error listing files:', error);
+            }
+
+            attempts++;
         }
-        const pdfUrl = pdfPage.url();
-        console.log('PDF URL:', pdfUrl);
 
-        // Download the PDF using page evaluation with fetch
-        console.log('Downloading PDF...');
-        const buffer = await pdfPage.evaluate(async (url: string) => {
-            const response = await fetch(url);
-            const arrayBuffer = await response.arrayBuffer();
-            return Array.from(new Uint8Array(arrayBuffer));
-        }, pdfUrl);
+        if (!newFilename) {
+            throw new Error('Download did not complete within expected time (no new files detected)');
+        }
 
-        // Extract filename from URL
-        const filename = pdfUrl.split('/').pop() || 'download.pdf';
-        const remotePath = `${DOWNLOAD_DIR}/${filename}`;
+        // The file is already in DOWNLOAD_DIR with the correct filename
+        const remotePath = `${DOWNLOAD_DIR}/${newFilename}`;
         console.log('Remote path:', remotePath);
-
-        // Write the PDF to Kernel's remote filesystem
-        console.log('Writing file to remote filesystem...');
-        const bufferData = Buffer.from(buffer);
-        await kernel.browsers.fs.writeFile(
-            kernelBrowser.session_id,
-            bufferData,
-            { path: remotePath }
-        );
+        console.log('PDF successfully downloaded to remote filesystem.');
 
         // Return information for the local client to download the file
-        console.log('PDF downloaded to remote filesystem. Return session info for local client.');
-
         return {
-            pdfUrl,
-            filename,
+            pdfUrl: url, // Original URL where we started
+            filename: newFilename,
             remotePath,
             session_id: kernelBrowser.session_id
         };
