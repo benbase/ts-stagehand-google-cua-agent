@@ -78,6 +78,8 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
             env: "LOCAL",
             localBrowserLaunchOptions: {
                 cdpUrl: kernelBrowser.cdp_ws_url,
+                downloadsPath: DOWNLOAD_DIR,
+                acceptDownloads: true
             },
             model,
             apiKey: OPENAI_API_KEY,
