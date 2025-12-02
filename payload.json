@@ -1,0 +1,10 @@
+{
+  "url": "https://business.kaiserpermanente.org/business/signon",
+  "instruction": "Our goal is to download the November 2025 invoice for the Small Business Client with Group ID %groupNumber% \n - First Sign In with the login credentials username %username% and password %password% \n - The navigate to Book of Business and find the Small Business Client with Group ID %groupNumber% and navigate to the documents page \n - Then on the documents page click on the invoices link and then find the November invoice on the invoices page and click the PDF link to download the invoice (No need to filter by date, check directly on the page for the date). You'll know if the file was downloaded by checking the browser download button icon at the top right corner and checking the time. \n Note: if you encounter any popups, you should close them, accept any cookie requests, and don't worry about any BAA agreement prompts",
+  "maxSteps": 40,
+  "variables": {
+    "username": "benbasemw",
+    "password": "UFgDKa!WdCfN9*6E3fpXwybV",
+    "groupNumber": "738001"
+  }
+}

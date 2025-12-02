@@ -7,11 +7,12 @@ const app = kernel.app('ts-stagehand-bb');
 
 interface DownloadTaskInput {
     url: string; // Target URL to navigate to
-    instruction: string; // Task instructions for the agent to execute (credentials are injected by the client)
+    instruction: string; // Task instructions for the agent (use %variableName% placeholders for sensitive data)
     maxSteps: number; // Maximum number of steps the agent can take
     model?: string; // Stagehand model for DOM analysis and element extraction
     agentModel?: string; // Computer Use Agent model for executing task instructions
     systemPrompt?: string; // System prompt for the Computer Use Agent
+    variables?: Record<string, string>; // Sensitive data (credentials, etc.) - kept out of prompts/logs via Stagehand's variable substitution
 }
 
 interface DownloadTaskOutput {
@@ -48,6 +49,8 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         const agentModel = payload?.agentModel || "google/gemini-2.5-computer-use-preview-10-2025"
         // System prompt: guides the agent's behavior
         const systemPrompt = payload?.systemPrompt || "You are a helpful assistant that can use a web browser. Do not ask follow up questions, the user will trust your judgement."
+        // Variables for sensitive data (credentials) - kept out of prompts/logs
+        const variables = payload?.variables || {}
 
         if (!url || !instruction || !maxSteps) {
             throw new Error('url, instruction, and maxSteps are required');
@@ -58,6 +61,7 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         console.log('maxSteps:', maxSteps);
         console.log('stagehand model:', model);
         console.log('agent model:', agentModel);
+        console.log('variables provided:', Object.keys(variables).length > 0 ? Object.keys(variables).join(', ') : 'none');
 
         const kernelBrowser = await kernel.browsers.create({
             invocation_id: ctx.invocation_id,
@@ -77,7 +81,7 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
             },
             model,
             apiKey: OPENAI_API_KEY,
-            verbose: 1,
+            verbose: 0, // Disabled to prevent sensitive data from appearing in logs
             domSettleTimeout: 30_000
         });
         await stagehand.init();
@@ -112,10 +116,17 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
             systemPrompt: `${systemPrompt}\n\nYou are currently on the following page: ${page.url()}.`,
         });
 
-        // Use agent to click the PDF link
-        console.log('Executing agent to click PDF link...');
+        // Substitute variables into instruction (keeps sensitive data out of logs)
+        // Variables use %variableName% syntax (e.g., "type %username% into the email field")
+        let resolvedInstruction = instruction;
+        for (const [key, value] of Object.entries(variables)) {
+            resolvedInstruction = resolvedInstruction.replace(new RegExp(`%${key}%`, 'g'), value);
+        }
+
+        // Execute the agent task
+        console.log('Executing agent task...');
         await agent.execute({
-            instruction,
+            instruction: resolvedInstruction,
             maxSteps
         });
         console.log('Agent completed.');
@@ -125,7 +136,7 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         let attempts = 0;
         const maxAttempts = 20; // Wait up to 20 seconds
 
-        while (!newFilename && attempts < maxAttempts) {
+        while (attempts < maxAttempts) {
             console.log(`Checking for downloaded files (attempt ${attempts + 1}/${maxAttempts})...`);
             await new Promise(resolve => setTimeout(resolve, 1000));
 

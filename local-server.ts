@@ -41,11 +41,12 @@ if (!GOOGLE_API_KEY) {
 
 interface DownloadTaskInput {
     url: string;
-    instruction: string;
+    instruction: string; // Use %variableName% placeholders for sensitive data
     maxSteps: number;
     model?: string;
     agentModel?: string;
     systemPrompt?: string;
+    variables?: Record<string, string>; // Sensitive data (credentials, etc.) - kept out of logs
 }
 
 interface DownloadTaskOutput {
@@ -110,6 +111,7 @@ async function executeDownloadTask(payload: DownloadTaskInput): Promise<Download
     const model = payload.model || "openai/gpt-4.1";
     const agentModel = payload.agentModel || "google/gemini-2.5-computer-use-preview-10-2025";
     const systemPrompt = payload.systemPrompt || "You are a helpful assistant that can use a web browser. Do not ask follow up questions, the user will trust your judgement.";
+    const variables = payload.variables || {};
 
     if (!url || !instruction || !maxSteps) {
         throw new Error('url, instruction, and maxSteps are required');
@@ -120,6 +122,7 @@ async function executeDownloadTask(payload: DownloadTaskInput): Promise<Download
     console.log('maxSteps:', maxSteps);
     console.log('stagehand model:', model);
     console.log('agent model:', agentModel);
+    console.log('variables provided:', Object.keys(variables).length > 0 ? Object.keys(variables).join(', ') : 'none');
 
     // Generate a session ID for this run
     const sessionId = `local-${Date.now()}`;
@@ -162,10 +165,17 @@ async function executeDownloadTask(payload: DownloadTaskInput): Promise<Download
             systemPrompt: systemPrompt,
         });
 
+        // Substitute variables into instruction (keeps sensitive data out of logs)
+        // Variables use %variableName% syntax (e.g., "type %username% into the email field")
+        let resolvedInstruction = instruction;
+        for (const [key, value] of Object.entries(variables)) {
+            resolvedInstruction = resolvedInstruction.replace(new RegExp(`%${key}%`, 'g'), value);
+        }
+
         // Execute the instruction
         console.log('Executing agent...');
         await agent.execute({
-            instruction,
+            instruction: resolvedInstruction,
             maxSteps
         });
         console.log('Agent completed.');
