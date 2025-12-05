@@ -1,5 +1,7 @@
 import { Stagehand } from "@browserbasehq/stagehand";
 import { Kernel, type KernelContext } from '@onkernel/sdk';
+import { TOTP } from 'totp-generator';
+import { z } from 'zod/v3';
 
 const kernel = new Kernel();
 
@@ -34,6 +36,11 @@ if (!OPENAI_API_KEY) {
 
 if (!GOOGLE_API_KEY) {
     throw new Error('GOOGLE_API_KEY is not set');
+}
+
+async function calculate2faOtpCode(secret_key: string): Promise<string> {
+    const { otp, expires } = await TOTP.generate(secret_key);
+    return otp;
 }
 
 app.action<DownloadTaskInput, DownloadTaskOutput>(
@@ -116,6 +123,18 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
             },
             cua: true,
             systemPrompt: `${systemPrompt}\n\nYou are currently on the following page: ${page.url()}.`,
+            tools: {
+                calculate_2fa_otp_code: {
+                    description: "Calculate the 2FA OTP code for the given secret key",
+                    inputSchema: z.object({
+                        secret_key: z.string().describe("The secret key to calculate the OTP code for"),
+                    }),
+                    execute: async ({ secret_key }) => {
+                        const otp = await calculate2faOtpCode(secret_key);
+                        return otp;
+                    },
+                },
+            }
         });
 
         // Substitute variables into instruction (keeps sensitive data out of logs)

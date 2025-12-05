@@ -1,0 +1,10 @@
+{
+  "url": "https://www.uhceservices.com/en/prelogin",
+  "instruction": "Our goal is to login into a 2FA website - First Sign In with the login credentials username %username% and password %password% \n - Then when prompted for a 2FA code use your tool to calculate the 2FA OTP code for the given secret key %secret_key% \n - Then enter the 2FA OTP code and finish login",
+  "maxSteps": 40,
+  "variables": {
+    "username": "benbasecs",
+    "password": "ziiTzkA9mkKp7aqFJw7gVZW@PRYk_ynNTPBrjyd_hx!adqKMEGsyf9Xn4C48",
+    "secret_key": "DWVS6QFVYDGHXCWOBKXMY3C7UIJQEIR5"
+  }
+}
