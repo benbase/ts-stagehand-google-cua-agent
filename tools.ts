@@ -1,7 +1,7 @@
-import type { Stagehand } from "@browserbasehq/stagehand";
-import { TOTP } from 'totp-generator';
-import { z } from 'zod/v3';
-import type { Credentials, TaskResultStatus } from './types';
+import type {Stagehand} from "@browserbasehq/stagehand";
+import {TOTP} from 'totp-generator';
+import {z} from 'zod/v3';
+import type {Credentials, TaskResultStatus} from './types';
 
 async function calculate2faOtpCode(secretKey: string): Promise<string> {
     const { otp } = await TOTP.generate(secretKey);
@@ -116,7 +116,7 @@ Status values:
                 console.log(`[report_result] Agent reported:`, JSON.stringify(result));
 
                 // Convert to our discriminated union type
-                const typedResult: TaskResultStatus = (() => {
+                capturedResult = (() => {
                     switch (result.status) {
                         case 'success':
                             return {
@@ -125,20 +125,18 @@ Status values:
                                 filename: result.filename || 'unknown'
                             };
                         case 'login_failed':
-                            return { status: 'login_failed' as const, reason: result.message };
+                            return {status: 'login_failed' as const, reason: result.message};
                         case 'group_not_found':
-                            return { status: 'group_not_found' as const, groupId: result.groupId || result.message };
+                            return {status: 'group_not_found' as const, groupId: result.groupId || result.message};
                         case 'document_not_found':
-                            return { status: 'document_not_found' as const, description: result.message };
+                            return {status: 'document_not_found' as const, description: result.message};
                         case 'download_failed':
-                            return { status: 'download_failed' as const, reason: result.message };
+                            return {status: 'download_failed' as const, reason: result.message};
                         case 'error':
                         default:
-                            return { status: 'error' as const, message: result.message };
+                            return {status: 'error' as const, message: result.message};
                     }
                 })();
-
-                capturedResult = typedResult;
                 return { acknowledged: true, status: result.status };
             },
         },
