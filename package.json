@@ -8,8 +8,8 @@
     "deploy": "./deploy.sh"
   },
   "dependencies": {
-    "@browserbasehq/stagehand": "^3.0.1",
-    "@onkernel/sdk": "^0.18.0",
+    "@browserbasehq/stagehand": "^3.0.7",
+    "@onkernel/sdk": "^0.24.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
     "totp-generator": "^2.0.0",

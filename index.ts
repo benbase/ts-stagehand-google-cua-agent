@@ -1,31 +1,11 @@
 import { Stagehand } from "@browserbasehq/stagehand";
 import { Kernel, type KernelContext } from '@onkernel/sdk';
-import { TOTP } from 'totp-generator';
-import { z } from 'zod/v3';
+import type { DownloadTaskInput, DownloadTaskOutput, TaskResultStatus } from './types';
+import { createAgentTools } from './tools';
 
 const kernel = new Kernel();
-
 const app = kernel.app('ts-stagehand-bb');
 
-interface DownloadTaskInput {
-    url: string; // Target URL to navigate to
-    instruction: string; // Task instructions for the agent (use %variableName% placeholders for sensitive data)
-    maxSteps: number; // Maximum number of steps the agent can take
-    model?: string; // Stagehand model for DOM analysis and element extraction
-    agentModel?: string; // Computer Use Agent model for executing task instructions
-    systemPrompt?: string; // System prompt for the Computer Use Agent
-    variables?: Record<string, string>; // Sensitive data (credentials, etc.) - kept out of prompts/logs via Stagehand's variable substitution
-}
-
-interface DownloadTaskOutput {
-    pdfUrl: string;
-    filename: string;
-    remotePath: string;
-    session_id: string;
-}
-
-// LLM API Keys are set in the environment during `kernel deploy index.ts --env-file .env`
-// See https://www.onkernel.com/docs/apps/deploy#environment-variables
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const DOWNLOAD_DIR = '/tmp/downloads';
@@ -38,26 +18,32 @@ if (!GOOGLE_API_KEY) {
     throw new Error('GOOGLE_API_KEY is not set');
 }
 
-async function calculate2faOtpCode(secret_key: string): Promise<string> {
-    const { otp, expires } = await TOTP.generate(secret_key);
-    return otp;
-}
+// System prompt that enforces structured result reporting
+const RESULT_REPORTING_PROMPT = `
+IMPORTANT: You MUST call the report_result tool before completing your task.
+This tool reports the outcome of your work in a structured format.
+
+Possible outcomes to report:
+- success: Task completed, file downloaded (include fileUrl and filename)
+- login_failed: Could not log in (include reason like "invalid credentials" or "account locked")
+- group_not_found: The specified group/account was not found (include the groupId)
+- document_not_found: The requested document was not found (include description)
+- download_failed: Found the document but download failed (include reason)
+- error: Any other error (include message)
+
+Always call report_result with the appropriate status before finishing.
+`;
 
 app.action<DownloadTaskInput, DownloadTaskOutput>(
     'download-task',
     async (ctx: KernelContext, payload?: DownloadTaskInput): Promise<DownloadTaskOutput> => {
-
-        const url = payload?.url
-        const instruction = payload?.instruction
-        const maxSteps = payload?.maxSteps
-        // Stagehand model: used for DOM analysis and element extraction
-        const model = payload?.model || "openai/gpt-4.1"
-        // Agent model: used for executing task instructions via Computer Use Agent
-        const agentModel = payload?.agentModel || "google/gemini-2.5-computer-use-preview-10-2025"
-        // System prompt: guides the agent's behavior
-        const systemPrompt = payload?.systemPrompt || "You are a helpful assistant that can use a web browser. Do not ask follow up questions, the user will trust your judgement."
-        // Variables for sensitive data (credentials) - kept out of prompts/logs
-        const variables = payload?.variables || {}
+        const url = payload?.url;
+        const instruction = payload?.instruction;
+        const maxSteps = payload?.maxSteps;
+        const model = payload?.model || "openai/gpt-4.1";
+        const agentModel = payload?.agentModel || "google/gemini-2.5-computer-use-preview-10-2025";
+        const baseSystemPrompt = payload?.systemPrompt || "You are a helpful assistant that can use a web browser. Do not ask follow up questions, the user will trust your judgement.";
+        const variables = payload?.variables || {};
 
         if (!url || !instruction || !maxSteps) {
             throw new Error('url, instruction, and maxSteps are required');
@@ -68,19 +54,18 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         console.log('maxSteps:', maxSteps);
         console.log('stagehand model:', model);
         console.log('agent model:', agentModel);
-        console.log('variables provided:', Object.keys(variables).length > 0 ? Object.keys(variables).join(', ') : 'none');
+        console.log('credentials provided:', Object.keys(variables).length > 0 ? Object.keys(variables).map(k => `${k}=***`).join(', ') : 'none');
 
+        // Create browser
         const kernelBrowser = await kernel.browsers.create({
             invocation_id: ctx.invocation_id,
             stealth: true,
-            viewport: {
-                width: 1440,
-                height: 900,
-            },
+            viewport: { width: 1440, height: 900 },
         });
+        console.log("Kernel browser live view url:", kernelBrowser.browser_live_view_url);
 
-        console.log("Kernel browser live view url: ", kernelBrowser.browser_live_view_url);
-
+        // Initialize Stagehand
+        // experimental: true + useAPI: false required for custom tools
         const stagehand = new Stagehand({
             env: "LOCAL",
             localBrowserLaunchOptions: {
@@ -90,14 +75,13 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
             },
             model,
             apiKey: OPENAI_API_KEY,
-            verbose: 0, // Disabled to prevent sensitive data from appearing in logs
-            domSettleTimeout: 30_000
+            verbose: 0,
+            domSettleTimeout: 30_000,
+            experimental: true,
+            disableAPI: true,
         });
         await stagehand.init();
 
-        /////////////////////////////////////
-        // Stagehand implementation
-        /////////////////////////////////////
         const page = stagehand.context.pages()[0];
         if (!page) {
             throw new Error('No page found in browser context');
@@ -105,94 +89,94 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
 
         await page.goto(url);
 
-        // List files in download directory before agent execution
+        // Track files before download
         let filesBefore: string[] = [];
         try {
             const listResult = await kernel.browsers.fs.listFiles(kernelBrowser.session_id, { path: DOWNLOAD_DIR });
             filesBefore = listResult.map((f) => f.name);
             console.log('Files before download:', filesBefore);
-        } catch (error) {
+        } catch {
             console.log('Download directory does not exist yet or is empty');
         }
 
-        // Create Computer Use Agent
+        // Create agent tools with result capture
+        const { tools, getResult } = createAgentTools(stagehand, variables);
+
+        // Create agent with tools and result-reporting prompt
+        const systemPrompt = `${baseSystemPrompt}\n\n${RESULT_REPORTING_PROMPT}\n\nYou are currently on the following page: ${page.url()}.`;
+
         const agent = stagehand.agent({
             model: {
                 modelName: agentModel,
                 apiKey: GOOGLE_API_KEY,
             },
-            cua: true,
-            systemPrompt: `${systemPrompt}\n\nYou are currently on the following page: ${page.url()}.`,
-            tools: {
-                calculate_2fa_otp_code: {
-                    description: "Calculate the 2FA OTP code for the given secret key",
-                    inputSchema: z.object({
-                        secret_key: z.string().describe("The secret key to calculate the OTP code for"),
-                    }),
-                    execute: async ({ secret_key }) => {
-                        const otp = await calculate2faOtpCode(secret_key);
-                        return otp;
-                    },
-                },
-            }
+            mode: 'cua',
+            systemPrompt,
+            tools,
         });
 
-        // Substitute variables into instruction (keeps sensitive data out of logs)
-        // Variables use %variableName% syntax (e.g., "type %username% into the email field")
-        let resolvedInstruction = instruction;
-        for (const [key, value] of Object.entries(variables)) {
-            resolvedInstruction = resolvedInstruction.replace(new RegExp(`%${key}%`, 'g'), value);
-        }
-
-        // Execute the agent task
+        // Execute task
         console.log('Executing agent task...');
-        await agent.execute({
-            instruction: resolvedInstruction,
-            maxSteps
-        });
+        await agent.execute({ instruction, maxSteps });
         console.log('Agent completed.');
 
-        // Wait and check for new files in download directory
-        let newFilename: string | null = null;
-        let attempts = 0;
-        const maxAttempts = 20; // Wait up to 20 seconds
+        // Get the structured result from the agent
+        let result: TaskResultStatus = getResult() ?? { status: 'error', message: 'Agent did not report a result' };
 
-        while (attempts < maxAttempts) {
-            console.log(`Checking for downloaded files (attempt ${attempts + 1}/${maxAttempts})...`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
+        // If agent reported success, verify the download actually happened
+        if (result.status === 'success') {
+            let newFilename: string | null = null;
+            const maxAttempts = 20;
 
-            try {
-                const listResult = await kernel.browsers.fs.listFiles(kernelBrowser.session_id, { path: DOWNLOAD_DIR });
-                const filesAfter = listResult.map((f) => f.name);
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                console.log(`Checking for downloaded files (attempt ${attempt + 1}/${maxAttempts})...`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
 
-                // Find new files
-                const newFiles = filesAfter.filter((f) => !filesBefore.includes(f));
-                if (newFiles.length > 0 && newFiles[0]) {
-                    newFilename = newFiles[0]; // Take the first new file
-                    console.log('New file detected:', newFilename);
-                    break;
+                try {
+                    const listResult = await kernel.browsers.fs.listFiles(kernelBrowser.session_id, { path: DOWNLOAD_DIR });
+                    const filesAfter = listResult.map((f) => f.name);
+                    const newFiles = filesAfter.filter((f) => !filesBefore.includes(f));
+
+                    if (newFiles.length > 0 && newFiles[0]) {
+                        newFilename = newFiles[0];
+                        console.log('New file detected:', newFilename);
+                        break;
+                    }
+                } catch (error) {
+                    console.log('Error listing files:', error);
                 }
-            } catch (error) {
-                console.log('Error listing files:', error);
             }
 
-            attempts++;
+            if (newFilename) {
+                const remotePath = `${DOWNLOAD_DIR}/${newFilename}`;
+                console.log('Remote path:', remotePath);
+                console.log('File successfully downloaded to remote filesystem.');
+
+                // Update result with actual file info
+                result = {
+                    status: 'success',
+                    fileUrl: remotePath,
+                    filename: newFilename,
+                };
+
+                return {
+                    result,
+                    remotePath,
+                    session_id: kernelBrowser.session_id
+                };
+            } else {
+                // Agent said success but no file found
+                result = {
+                    status: 'download_failed',
+                    reason: 'Agent reported success but no new file was detected in download directory'
+                };
+            }
         }
 
-        if (!newFilename) {
-            throw new Error('Download did not complete within expected time (no new files detected)');
-        }
-
-        // The file is already in DOWNLOAD_DIR with the correct filename
-        const remotePath = `${DOWNLOAD_DIR}/${newFilename}`;
-        console.log('Remote path:', remotePath);
-        console.log('PDF successfully downloaded to remote filesystem.');
-
-        // Return information for the local client to download the file
+        // Return with failure result (no remotePath)
+        console.log('Task result:', JSON.stringify(result));
         return {
-            pdfUrl: url, // Original URL where we started
-            filename: newFilename,
-            remotePath,
+            result,
             session_id: kernelBrowser.session_id
         };
     },

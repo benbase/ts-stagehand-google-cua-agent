@@ -1,0 +1,9 @@
+{
+  "url": "https://business.kaiserpermanente.org/business/signon",
+  "instruction": "Download the November 2025 invoice for the Small Business Client with Group ID 738001.\n\n1. First, use the perform_login tool to sign in\n2. Navigate to Book of Business and find the Small Business Client with Group ID 738001\n3. Go to the documents page and click on invoices\n4. Find the November 2025 invoice and click the PDF link to download\n5. Call report_result with the outcome:\n   - success if file downloaded (include filename)\n   - login_failed if login didn't work (include reason like 'invalid credentials')\n   - group_not_found if group doesn't exist\n   - document_not_found if invoice not found\n\nNote: Close any popups, accept cookies, dismiss BAA prompts.",
+  "maxSteps": 40,
+  "variables": {
+    "username": "benbasemw",
+    "password": "WRONG_PASSWORD_FOR_TESTING"
+  }
+}
