@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "WebFetch(domain:onkernel.com)",
-      "WebFetch(domain:www.kernel.sh)"
-    ]
-  }
-}
