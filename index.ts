@@ -49,8 +49,19 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
             throw new Error('url, instruction, and maxSteps are required');
         }
 
+        // Substitute non-sensitive variables in instruction (exclude credentials)
+        const sensitiveKeys = ['username', 'password', 'totp_secret'];
+        let resolvedInstruction = instruction;
+        for (const [key, value] of Object.entries(variables)) {
+            if (!sensitiveKeys.includes(key)) {
+                console.log(`Substituting %${key}% with value: ${value}`);
+                resolvedInstruction = resolvedInstruction.replace(new RegExp(`%${key}%`, 'g'), value);
+            }
+        }
+        console.log('Variables to substitute:', Object.keys(variables).filter(k => !sensitiveKeys.includes(k)));
+
         console.log('url:', url);
-        console.log('instruction:', instruction);
+        console.log('instruction:', resolvedInstruction);
         console.log('maxSteps:', maxSteps);
         console.log('stagehand model:', model);
         console.log('agent model:', agentModel);
@@ -117,7 +128,7 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
 
         // Execute task
         console.log('Executing agent task...');
-        await agent.execute({ instruction, maxSteps });
+        await agent.execute({ instruction: resolvedInstruction, maxSteps });
         console.log('Agent completed.');
 
         // Get the structured result from the agent

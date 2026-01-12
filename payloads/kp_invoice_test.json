@@ -1,9 +1,12 @@
 {
   "url": "https://business.kaiserpermanente.org/business/signon",
-  "instruction": "Download the November 2025 invoice for the Small Business Client with Group ID 738001.\n\n1. First, use the perform_login tool to sign in\n2. Navigate to Book of Business and find the Small Business Client with Group ID 738001\n3. Go to the documents page and click on invoices\n4. Find the November 2025 invoice and click the PDF link to download\n5. Call report_result with the outcome:\n   - success if file downloaded (include filename)\n   - login_failed if login didn't work\n   - group_not_found if group 738001 doesn't exist\n   - document_not_found if November 2025 invoice not found\n\nNote: Close any popups, accept cookies, dismiss BAA prompts.",
-  "maxSteps": 40,
+  "instruction": "OBJECTIVE: Download the %invoiceMonth% %invoiceYear% invoice for Group ID %groupNumber%.\n\nSTEP 1 - LOGIN:\nCall perform_login tool. If it returns success=false, immediately call report_result with status 'login_failed'.\n\nSTEP 2 - NAVIGATE TO CLIENT OVERVIEW:\nGo to Book of Business > Client Overview. Do NOT use any search functionality.\n\nSTEP 3 - FIND THE GROUP (EXHAUSTIVE SEARCH):\nYou must search BOTH tabs systematically:\n\na) Start with 'Small Business' tab:\n   - Scan the visible client list for Group ID %groupNumber%\n   - If pagination exists, check EVERY page before moving on\n   - Click 'Next' or page numbers until you've seen all pages\n\nb) Then check 'Large Business' tab:\n   - Same process: scan visible list, then paginate through ALL pages\n\nIMPORTANT: Only conclude 'group_not_found' after checking ALL pages of BOTH tabs.\n\nSTEP 4 - ACCESS DOCUMENTS:\nOnce you find Group ID %groupNumber%, click on it to open the client details, then navigate to the Documents section and click on Invoices.\n\nSTEP 5 - DOWNLOAD INVOICE:\nLocate the %invoiceMonth% %invoiceYear% invoice in the list. Click the PDF link/icon to download. Do not filter by date - scan the visible list and paginate if needed.\n\nSTEP 6 - REPORT RESULT:\nCall report_result with:\n- 'success' + filename if downloaded\n- 'login_failed' if login failed\n- 'group_not_found' + groupId if not found after exhaustive search\n- 'document_not_found' if group found but invoice not available\n\nNOTES:\n- Dismiss any popups, cookie banners, or BAA prompts immediately\n- Wait for pages to fully load before scanning\n- The group ID %groupNumber% may appear in a column labeled 'Group #', 'Group ID', or similar",
+  "maxSteps": 50,
   "variables": {
     "username": "benbasemw",
-    "password": "-EnUyE@m4xDnC!"
+    "password": "-EnUyE@m4xDnC!",
+    "groupNumber": "738001",
+    "invoiceMonth": "November",
+    "invoiceYear": "2025"
   }
 }
