@@ -104,12 +104,15 @@ export function createAgentTools(stagehand: Stagehand, credentials: Credentials)
         report_result: {
             description: `REQUIRED: Report the final outcome of your task. Call this before finishing.
 
+CRITICAL: Before reporting "success", verify the document date matches EXACTLY what was requested.
+If the date does not match, report "download_failed" instead.
+
 Status values:
-- "success": File downloaded successfully. Include filename in message.
+- "success": File downloaded WITH CORRECT DATE. Include filename in message. Only use if date matches request.
 - "login_failed": Could not log in. Include error reason in message.
 - "group_not_found": Group/account not found. Include groupId.
 - "document_not_found": Document not found. Describe what was searched.
-- "download_failed": Found document but download failed. Include reason.
+- "download_failed": REQUIRED if requested date is not available. Include: what date was requested, what dates were actually available.
 - "error": Other error. Describe what went wrong.`,
             inputSchema: TaskResultSchema,
             execute: async (result: z.infer<typeof TaskResultSchema>) => {

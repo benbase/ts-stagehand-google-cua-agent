@@ -23,12 +23,19 @@ const RESULT_REPORTING_PROMPT = `
 IMPORTANT: You MUST call the report_result tool before completing your task.
 This tool reports the outcome of your work in a structured format.
 
+CRITICAL DATE VALIDATION:
+Before reporting success, you MUST verify that the document you are downloading matches the EXACT date requested in the instructions.
+- Check the document title, filename, or date column carefully
+- If the document date does NOT match the requested date, report "download_failed" with reason explaining the date mismatch
+- Example: If asked for "June 2026" invoice but only "November 2025" is available, report download_failed with reason "Requested date June 2026 not found - only November 2025 available"
+- Do NOT download a document with a different date than requested
+
 Possible outcomes to report:
-- success: Task completed, file downloaded (include fileUrl and filename)
+- success: Task completed, file downloaded WITH CORRECT DATE (include fileUrl and filename)
 - login_failed: Could not log in (include reason like "invalid credentials" or "account locked")
 - group_not_found: The specified group/account was not found (include the groupId)
 - document_not_found: The requested document was not found (include description)
-- download_failed: Found the document but download failed (include reason)
+- download_failed: Found documents but the EXACT DATE requested is not available, OR download failed for another reason (include the date you were looking for and what dates were actually available)
 - error: Any other error (include message)
 
 Always call report_result with the appropriate status before finishing.
