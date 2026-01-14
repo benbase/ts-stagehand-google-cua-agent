@@ -20,11 +20,11 @@ export type TaskResultStatus =
 export interface DownloadTaskOutput {
     result: TaskResultStatus;
     remotePath?: string;
-    session_id: string;
+    sessionId: string;
 }
 
 export interface Credentials {
     username?: string;
     password?: string;
-    totp_secret?: string;
+    totpSecret?: string;
 }

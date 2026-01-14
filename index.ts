@@ -57,7 +57,7 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         }
 
         // Substitute non-sensitive variables in instruction (exclude credentials)
-        const sensitiveKeys = ['username', 'password', 'totp_secret'];
+        const sensitiveKeys = ['username', 'password', 'totpSecret'];
         let resolvedInstruction = instruction;
         for (const [key, value] of Object.entries(variables)) {
             if (!sensitiveKeys.includes(key)) {
@@ -180,7 +180,7 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
                 return {
                     result,
                     remotePath,
-                    session_id: kernelBrowser.session_id
+                    sessionId: kernelBrowser.session_id
                 };
             } else {
                 // Agent said success but no file found
@@ -195,7 +195,7 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         console.log('Task result:', JSON.stringify(result));
         return {
             result,
-            session_id: kernelBrowser.session_id
+            sessionId: kernelBrowser.session_id
         };
     },
 );
