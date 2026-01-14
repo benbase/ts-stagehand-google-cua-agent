@@ -139,7 +139,7 @@ export function createAgentTools(stagehand: Stagehand, credentials: Credentials)
                     // Verify login succeeded by checking for error messages
                     console.log('[perform_login] Verifying login status...');
                     const verification = await stagehand.extract(
-                        "Check if login was successful. Look for error messages like 'invalid password', 'incorrect credentials', 'login failed', 'authentication error', or similar. Also check if we're still on a login page or moved to a dashboard/home page.",
+                        "Check if login was successful. Login is SUCCESSFUL if you see a dashboard, welcome message, home page, navigation menu, or any authenticated content (even if partially hidden behind a popup/modal). Login FAILED only if you see an explicit error message like 'invalid password', 'incorrect credentials', 'account locked', or if you're still on the login form with an error. Ignore popups/modals when determining success - check what's behind them.",
                         LoginVerificationSchema
                     );
 
