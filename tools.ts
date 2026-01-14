@@ -136,10 +136,27 @@ export function createAgentTools(stagehand: Stagehand, credentials: Credentials)
                         }
                     }
 
+                    // Wait for any loading indicators to complete before verifying
+                    console.log('[perform_login] Checking for loading indicators...');
+                    for (let i = 0; i < 6; i++) {
+                        const loadingCheck = await stagehand.extract(
+                            "Check if the page is showing a loading indicator, spinner, or progress message like 'Signing you in', 'Please wait', 'Loading', etc.",
+                            z.object({
+                                isLoading: z.boolean().describe("true if page shows loading/progress indicator"),
+                            })
+                        );
+                        if (!loadingCheck.isLoading) {
+                            console.log('[perform_login] Page finished loading');
+                            break;
+                        }
+                        console.log(`[perform_login] Page still loading, waiting... (attempt ${i + 1}/6)`);
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                    }
+
                     // Verify login succeeded by checking for error messages
                     console.log('[perform_login] Verifying login status...');
                     const verification = await stagehand.extract(
-                        "Check if login was successful. Login is SUCCESSFUL if you see a dashboard, welcome message, home page, navigation menu, or any authenticated content (even if partially hidden behind a popup/modal). Login FAILED only if you see an explicit error message like 'invalid password', 'incorrect credentials', 'account locked', or if you're still on the login form with an error. Ignore popups/modals when determining success - check what's behind them.",
+                        "Check if login was successful. Login is SUCCESSFUL if you see a dashboard, welcome message, home page, navigation menu, or any authenticated content (even if partially hidden behind a popup/modal). Login FAILED only if you see an explicit error message like 'invalid password', 'incorrect credentials', 'account locked', or if you're still on the login form with an error. Messages like 'Signing you in, please wait' are NOT errors - they are loading indicators. Ignore popups/modals when determining success - check what's behind them.",
                         LoginVerificationSchema
                     );
 
