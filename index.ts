@@ -82,6 +82,16 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         });
         console.log("Kernel browser live view url:", kernelBrowser.browser_live_view_url);
 
+        // Start recording
+        let replayId: string | null = null;
+        try {
+            const replay = await kernel.browsers.replays.start(kernelBrowser.session_id);
+            replayId = replay.replay_id;
+            console.log("Recording started with ID:", replayId);
+        } catch (error) {
+            console.log("Failed to start recording:", error);
+        }
+
         // Initialize Stagehand
         // experimental: true + useAPI: false required for custom tools
         const stagehand = new Stagehand({
@@ -177,6 +187,16 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
                     filename: newFilename,
                 };
 
+                // Stop recording before returning
+                if (replayId) {
+                    try {
+                        await kernel.browsers.replays.stop(replayId, { id: kernelBrowser.session_id });
+                        console.log("Recording stopped");
+                    } catch (error) {
+                        console.log("Failed to stop recording:", error);
+                    }
+                }
+
                 return {
                     result,
                     remotePath,
@@ -188,6 +208,16 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
                     status: 'download_failed',
                     reason: 'Agent reported success but no new file was detected in download directory'
                 };
+            }
+        }
+
+        // Stop recording before returning
+        if (replayId) {
+            try {
+                await kernel.browsers.replays.stop(replayId, { id: kernelBrowser.session_id });
+                console.log("Recording stopped");
+            } catch (error) {
+                console.log("Failed to stop recording:", error);
             }
         }
 

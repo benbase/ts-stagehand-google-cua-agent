@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benbase - CUAV2 Playground</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <button class="icon-btn" id="sidebar-toggle" title="Toggle sidebar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="9" y1="3" x2="9" y2="21"></line>
+        </svg>
+      </button>
+      <div>
+        <h4>Benbase</h4>
+        <h5>CUAV2 Playground</h5>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="status-indicator" id="status">
+        <span class="status-dot"></span>
+        <span id="status-text">Ready</span>
+      </span>
+      <button class="icon-btn" id="results-toggle" title="Downloaded Files">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+      </button>
+      <button class="icon-btn" id="theme-toggle" title="Toggle theme">
+        <span id="theme-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </span>
+      </button>
+    </div>
+  </header>
+
+  <main class="main-content" id="main-content">
+    <!-- Left Panel -->
+    <section class="panel panel-left" id="panel-left">
+      <div class="panel-left-content">
+        <!-- Payloads Card -->
+        <div class="card">
+          <div class="card-header">
+            <h2>Payloads</h2>
+            <div class="card-actions">
+              <button class="btn btn-sm" id="new-payload-btn">+ New</button>
+              <button class="btn btn-sm" id="refresh-btn">Refresh</button>
+            </div>
+          </div>
+          <ul class="payload-list" id="payload-list">
+            <li class="empty-state">Loading...</li>
+          </ul>
+        </div>
+
+        <!-- Variables Card -->
+        <div class="card">
+          <div class="card-header">
+            <h2>Variables</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label for="payload-url">Target URL</label>
+              <input type="url" id="payload-url" placeholder="https://example.com">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="var-group-number">Group Number</label>
+                <input type="text" id="var-group-number" placeholder="e.g., 730199">
+              </div>
+              <div class="form-group">
+                <label for="var-invoice-year">Year</label>
+                <input type="text" id="var-invoice-year" placeholder="2025">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="var-invoice-month">Month</label>
+              <select id="var-invoice-month">
+                <option value="">Select month</option>
+                <option value="January">January</option>
+                <option value="February">February</option>
+                <option value="March">March</option>
+                <option value="April">April</option>
+                <option value="May">May</option>
+                <option value="June">June</option>
+                <option value="July">July</option>
+                <option value="August">August</option>
+                <option value="September">September</option>
+                <option value="October">October</option>
+                <option value="November">November</option>
+                <option value="December">December</option>
+              </select>
+            </div>
+            <div class="credentials-section" id="credentials-section" style="display: none;">
+              <div class="credentials-header" id="credentials-toggle">
+                <span class="credentials-label">Credentials</span>
+                <span class="credentials-status" id="credentials-status">Using stored</span>
+                <svg class="credentials-chevron" id="credentials-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+              <div class="credentials-fields" id="credentials-fields" style="display: none;">
+                <div class="form-group">
+                  <label for="var-username">Username</label>
+                  <input type="text" id="var-username" placeholder="Leave empty to use stored">
+                </div>
+                <div class="form-group">
+                  <label for="var-password">Password</label>
+                  <input type="password" id="var-password" placeholder="Leave empty to use stored">
+                </div>
+                <div class="form-group">
+                  <label for="var-totp-secret">TOTP Secret</label>
+                  <input type="password" id="var-totp-secret" placeholder="Leave empty to use stored">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Actions (fixed at bottom) -->
+      <div class="card-actions-bar">
+        <button class="btn btn-primary" id="run-btn" disabled>
+          <span id="run-btn-text">Run</span>
+        </button>
+        <button class="btn" id="save-btn" disabled>Save as New</button>
+        <button class="btn btn-danger" id="stop-btn" style="display: none;">Stop</button>
+      </div>
+    </section>
+
+    <!-- Right Panel -->
+    <section class="panel panel-right" id="panel-right">
+      <!-- Tabs -->
+      <div class="panel-tabs">
+        <button class="panel-tab active" data-tab="editor" id="tab-editor">AOP</button>
+        <button class="panel-tab" data-tab="live-view" id="tab-live-view">
+          Live View
+          <span class="tab-status" id="tab-live-status"></span>
+        </button>
+        <button class="panel-tab" data-tab="history" id="tab-history">History</button>
+      </div>
+
+      <!-- Instruction Editor Tab -->
+      <div class="tab-content active" id="tab-content-editor">
+        <div class="instruction-editor">
+          <div class="instruction-editor-header">
+            <h2>Instruction</h2>
+            <div class="instruction-editor-actions">
+              <button type="button" class="variable-tag" data-var="%groupNumber%">%groupNumber%</button>
+              <button type="button" class="variable-tag" data-var="%invoiceMonth%">%invoiceMonth%</button>
+              <button type="button" class="variable-tag" data-var="%invoiceYear%">%invoiceYear%</button>
+            </div>
+          </div>
+          <textarea id="payload-instruction" placeholder="Enter instructions for the automation agent..."></textarea>
+        </div>
+      </div>
+
+      <!-- Live View Tab -->
+      <div class="tab-content" id="tab-content-live-view">
+        <!-- Idle State -->
+        <div class="live-view-idle" id="live-view-idle">
+          <div class="idle-icon">&#9654;</div>
+          <h3>Ready to Run</h3>
+          <p>Select a payload and click Run</p>
+        </div>
+
+        <!-- Running State -->
+        <div class="running-state" id="running-state" style="display: none;">
+        <!-- Live View -->
+        <div class="card card-grow">
+          <div class="card-header">
+            <h2>Live View</h2>
+            <div class="card-actions">
+              <span id="live-view-status">Connecting...</span>
+              <a href="#" id="live-view-link" target="_blank" style="display: none;">Open</a>
+            </div>
+          </div>
+          <div class="live-view-wrapper">
+            <div class="live-view-placeholder" id="live-view-placeholder">
+              Waiting for browser...
+            </div>
+            <iframe class="live-view-iframe" id="live-view-iframe"></iframe>
+          </div>
+        </div>
+
+        <!-- Results -->
+        <div class="card" id="results-section" style="display: none;">
+          <div class="card-header">
+            <h2>Results</h2>
+          </div>
+          <div class="results-container" id="results-container"></div>
+        </div>
+
+        <!-- Output -->
+        <div class="card">
+          <div class="card-header">
+            <h2>Output</h2>
+            <button class="btn btn-sm" id="clear-output-btn">Clear</button>
+          </div>
+          <pre class="output-log" id="output-log"></pre>
+        </div>
+        </div>
+      </div>
+
+      <!-- History Tab -->
+      <div class="tab-content" id="tab-content-history">
+        <div class="history-container">
+          <div class="history-header">
+            <h2>Session History</h2>
+            <button class="btn btn-sm" id="refresh-history-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              Refresh
+            </button>
+          </div>
+          <div class="history-list" id="history-list">
+            <div class="empty-history">
+              <div class="empty-history-icon">📼</div>
+              <h4>No recordings yet</h4>
+              <p>Session recordings will appear here after runs complete</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- History Detail View (shown when a session is selected) -->
+        <div class="history-detail" id="history-detail" style="display: none;">
+          <div class="history-detail-header">
+            <button class="btn btn-sm" id="history-back-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+              Back
+            </button>
+            <h3 id="history-detail-title">Session Details</h3>
+          </div>
+          <div class="history-detail-content">
+            <!-- Files container will be inserted here dynamically -->
+            <div class="history-detail-actions">
+              <a href="#" class="btn" id="history-download-video">Show Recording</a>
+              <a href="#" class="btn" id="history-view-online" target="_blank" title="Recording expires after 30 days">View Online</a>
+              <button class="btn" id="history-view-log">View Log</button>
+            </div>
+            <div class="history-video-container" style="display: none;">
+              <video id="history-video" controls>
+                Your browser does not support the video tag.
+              </video>
+              <div class="history-video-actions">
+                <a href="#" class="btn btn-sm" id="history-download-recording-link" download>Download Recording</a>
+              </div>
+            </div>
+            <div class="history-log-container" id="history-log-container" style="display: none;">
+              <h4>Session Log</h4>
+              <pre class="history-log" id="history-log"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Results Panel (Slide-out) -->
+  <div class="panel-overlay" id="results-panel-overlay"></div>
+  <aside class="results-panel" id="results-panel">
+    <div class="results-panel-header">
+      <h3>Downloaded Files</h3>
+      <button class="icon-btn" id="results-panel-close" title="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="results-panel-content" id="results-panel-content">
+      <div class="empty-results">
+        <div class="empty-results-icon">📁</div>
+        <h4>Loading...</h4>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Save Modal -->
+  <div class="modal-overlay" id="save-modal">
+    <div class="modal">
+      <h3>Save Payload</h3>
+      <input type="text" id="save-name-input" placeholder="Enter name (e.g., my_payload)">
+      <div class="modal-actions">
+        <button class="btn" id="save-cancel-btn">Cancel</button>
+        <button class="btn btn-primary" id="save-confirm-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

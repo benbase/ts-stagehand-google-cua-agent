@@ -153,6 +153,10 @@ export function createAgentTools(stagehand: Stagehand, credentials: Credentials)
                         await new Promise(resolve => setTimeout(resolve, 3000));
                     }
 
+                    // Wait a bit for the page to stabilize before verification
+                    console.log('[perform_login] Waiting for page to stabilize...');
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+
                     // Verify login succeeded by checking for error messages
                     console.log('[perform_login] Verifying login status...');
                     const verification = await stagehand.extract(
