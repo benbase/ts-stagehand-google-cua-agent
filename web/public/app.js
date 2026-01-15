@@ -462,9 +462,9 @@ class App {
 
   // Save
   openSaveModal() {
-    const name = this.isNewPayload ? 'new_payload' :
+    const defaultName = this.isNewPayload ? 'new_payload' :
       (this.selectedPayload?.replace('.json', '') + '_copy') || 'payload';
-    this.el.saveNameInput.value = name;
+    this.el.saveNameInput.value = defaultName;
     this.el.saveModal.classList.add('active');
     this.el.saveNameInput.focus();
     this.el.saveNameInput.select();
@@ -505,7 +505,10 @@ class App {
         }),
       });
 
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        this.setStatus('error', 'Save failed');
+        return;
+      }
 
       this.closeSaveModal();
       this.setStatus('success', 'Saved');

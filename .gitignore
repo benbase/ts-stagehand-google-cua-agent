@@ -37,4 +37,7 @@ coverage/
 # Misc
 .cache/
 .temp/
-.tmp/ 
+.tmp/
+
+# Web app session data
+web/results/

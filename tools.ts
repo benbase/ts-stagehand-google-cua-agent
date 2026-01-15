@@ -83,7 +83,7 @@ export function createAgentTools(stagehand: Stagehand, credentials: Credentials)
 
                     // Wait for page to respond (login can take time)
                     console.log('[perform_login] Waiting for login response...');
-                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    await new Promise(resolve => setTimeout(resolve, 10000));
 
                     // Check if 2FA is required (before checking login success)
                     if (totpSecret) {
@@ -138,7 +138,7 @@ export function createAgentTools(stagehand: Stagehand, credentials: Credentials)
 
                     // Wait for any loading indicators to complete before verifying
                     console.log('[perform_login] Checking for loading indicators...');
-                    for (let i = 0; i < 6; i++) {
+                    for (let i = 0; i < 10; i++) {
                         const loadingCheck = await stagehand.extract(
                             "Check if the page is showing a loading indicator, spinner, or progress message like 'Signing you in', 'Please wait', 'Loading', etc.",
                             z.object({
@@ -149,8 +149,8 @@ export function createAgentTools(stagehand: Stagehand, credentials: Credentials)
                             console.log('[perform_login] Page finished loading');
                             break;
                         }
-                        console.log(`[perform_login] Page still loading, waiting... (attempt ${i + 1}/6)`);
-                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        console.log(`[perform_login] Page still loading, waiting... (attempt ${i + 1}/10)`);
+                        await new Promise(resolve => setTimeout(resolve, 10000));
                     }
 
                     // Wait a bit for the page to stabilize before verification
