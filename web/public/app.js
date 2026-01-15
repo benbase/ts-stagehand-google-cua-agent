@@ -462,9 +462,8 @@ class App {
 
   // Save
   openSaveModal() {
-    const defaultName = this.isNewPayload ? 'new_payload' :
-      (this.selectedPayload?.replace('.json', '') + '_copy') || 'payload';
-    this.el.saveNameInput.value = defaultName;
+    this.el.saveNameInput.value = this.isNewPayload ? 'new_payload' :
+        (this.selectedPayload?.replace('.json', '') + '_copy') || 'payload';
     this.el.saveModal.classList.add('active');
     this.el.saveNameInput.focus();
     this.el.saveNameInput.select();
