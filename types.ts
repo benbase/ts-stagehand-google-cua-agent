@@ -27,4 +27,5 @@ export interface Credentials {
     username?: string;
     password?: string;
     totpSecret?: string;
+    email2faProvider?: string; // Provider name for email-based 2FA (e.g., "Guardian")
 }
