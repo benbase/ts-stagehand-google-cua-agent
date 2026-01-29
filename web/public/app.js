@@ -1,5 +1,5 @@
 /**
- * CUAV2 Playground
+ * CUA 2.0 Playground
  */
 
 class App {
@@ -9,6 +9,9 @@ class App {
     this.isRunning = false;
     this.isNewPayload = false;
     this.abortController = null;
+    this.theaterMode = false;
+    this.sidebarWasVisible = true; // Track sidebar state before theater mode
+    this.theaterHintTimeout = null;
 
     this.el = {
       mainContent: document.getElementById('main-content'),
@@ -16,11 +19,17 @@ class App {
       themeToggle: document.getElementById('theme-toggle'),
       themeIcon: document.getElementById('theme-icon'),
       payloadList: document.getElementById('payload-list'),
+      // App selector
+      appSelect: document.getElementById('app-select'),
       payloadUrl: document.getElementById('payload-url'),
       payloadInstruction: document.getElementById('payload-instruction'),
       varGroupNumber: document.getElementById('var-group-number'),
       varInvoiceMonth: document.getElementById('var-invoice-month'),
       varInvoiceYear: document.getElementById('var-invoice-year'),
+      maxSteps: document.getElementById('max-steps'),
+      // Models
+      agentModel: document.getElementById('agent-model'),
+      stagehandModel: document.getElementById('stagehand-model'),
       // Credentials
       credentialsSection: document.getElementById('credentials-section'),
       credentialsToggle: document.getElementById('credentials-toggle'),
@@ -29,11 +38,17 @@ class App {
       varUsername: document.getElementById('var-username'),
       varPassword: document.getElementById('var-password'),
       varTotpSecret: document.getElementById('var-totp-secret'),
+      // Proxy settings
+      proxyType: document.getElementById('proxy-type'),
+      proxyCountry: document.getElementById('proxy-country'),
+      proxyCountryGroup: document.getElementById('proxy-country-group'),
+      profileName: document.getElementById('profile-name'),
       newPayloadBtn: document.getElementById('new-payload-btn'),
       refreshBtn: document.getElementById('refresh-btn'),
       runBtn: document.getElementById('run-btn'),
       runBtnText: document.getElementById('run-btn-text'),
       saveBtn: document.getElementById('save-btn'),
+      updateBtn: document.getElementById('update-btn'),
       stopBtn: document.getElementById('stop-btn'),
       status: document.getElementById('status'),
       statusText: document.getElementById('status-text'),
@@ -53,7 +68,15 @@ class App {
       resultsSection: document.getElementById('results-section'),
       resultsContainer: document.getElementById('results-container'),
       outputLog: document.getElementById('output-log'),
+      copyOutputBtn: document.getElementById('copy-output-btn'),
       clearOutputBtn: document.getElementById('clear-output-btn'),
+      // Theater mode
+      liveViewCard: document.getElementById('live-view-card'),
+      liveViewOverlay: document.getElementById('live-view-overlay'),
+      theaterModeBtn: document.getElementById('theater-mode-btn'),
+      theaterExpandIcon: document.getElementById('theater-expand-icon'),
+      theaterCollapseIcon: document.getElementById('theater-collapse-icon'),
+      panelRight: document.getElementById('panel-right'),
       saveModal: document.getElementById('save-modal'),
       saveNameInput: document.getElementById('save-name-input'),
       saveCancelBtn: document.getElementById('save-cancel-btn'),
@@ -79,6 +102,7 @@ class App {
       historyViewLog: document.getElementById('history-view-log'),
       historyLogContainer: document.getElementById('history-log-container'),
       historyLog: document.getElementById('history-log'),
+      historyCopyLogBtn: document.getElementById('history-copy-log-btn'),
     };
 
     this.init();
@@ -88,6 +112,7 @@ class App {
     this.loadTheme();
     await this.loadPayloads();
     this.bindEvents();
+    this.updateAppVisibility();
   }
 
   // Theme
@@ -118,6 +143,11 @@ class App {
 
   // Tabs
   switchTab(tabName) {
+    // Exit theater mode when switching away from live view
+    if (tabName !== 'live-view') {
+      this.exitTheaterMode();
+    }
+
     // Update tab buttons
     this.el.tabEditor.classList.toggle('active', tabName === 'editor');
     this.el.tabLiveView.classList.toggle('active', tabName === 'live-view');
@@ -139,10 +169,74 @@ class App {
     this.el.tabLiveStatus.className = 'tab-status' + (status ? ` ${status}` : '');
   }
 
+  // Theater Mode
+  toggleTheaterMode() {
+    this.theaterMode = !this.theaterMode;
+    this.el.runningState.classList.toggle('theater-mode', this.theaterMode);
+    this.el.panelRight.classList.toggle('theater-mode-active', this.theaterMode);
+
+    // Toggle icons
+    this.el.theaterExpandIcon.style.display = this.theaterMode ? 'none' : 'block';
+    this.el.theaterCollapseIcon.style.display = this.theaterMode ? 'block' : 'none';
+
+    // Update button title
+    this.el.theaterModeBtn.title = this.theaterMode ? 'Exit theater mode (Esc)' : 'Theater mode (T)';
+
+    // Auto-hide/show sidebar
+    if (this.theaterMode) {
+      // Remember current sidebar state and hide it
+      this.sidebarWasVisible = !this.el.mainContent.classList.contains('sidebar-collapsed');
+      this.el.mainContent.classList.add('sidebar-collapsed');
+
+      // Show exit hint briefly
+      this.showTheaterHint();
+    } else {
+      // Restore sidebar if it was visible before
+      if (this.sidebarWasVisible) {
+        this.el.mainContent.classList.remove('sidebar-collapsed');
+      }
+    }
+  }
+
+  showTheaterHint() {
+    const hint = document.querySelector('.theater-exit-hint');
+    if (hint) {
+      hint.classList.add('visible');
+      clearTimeout(this.theaterHintTimeout);
+      this.theaterHintTimeout = setTimeout(() => {
+        hint.classList.remove('visible');
+      }, 2500);
+    }
+  }
+
+  exitTheaterMode() {
+    if (this.theaterMode) {
+      this.theaterMode = false;
+      this.el.runningState.classList.remove('theater-mode');
+      this.el.panelRight.classList.remove('theater-mode-active');
+      this.el.theaterExpandIcon.style.display = 'block';
+      this.el.theaterCollapseIcon.style.display = 'none';
+      this.el.theaterModeBtn.title = 'Theater mode (T)';
+
+      // Hide the exit hint
+      const hint = document.querySelector('.theater-exit-hint');
+      if (hint) {
+        hint.classList.remove('visible');
+        clearTimeout(this.theaterHintTimeout);
+      }
+
+      // Restore sidebar if it was visible before
+      if (this.sidebarWasVisible) {
+        this.el.mainContent.classList.remove('sidebar-collapsed');
+      }
+    }
+  }
+
   // Payloads
   async loadPayloads() {
     try {
-      const res = await fetch('/api/payloads');
+      const app = this.el.appSelect.value;
+      const res = await fetch(`/api/payloads?app=${app}`);
       const payloads = await res.json();
 
       if (!payloads.length) {
@@ -160,7 +254,8 @@ class App {
 
   async selectPayload(name) {
     try {
-      const res = await fetch(`/api/payloads/${name}`);
+      const app = this.el.appSelect.value;
+      const res = await fetch(`/api/payloads/${name}?app=${app}`);
       const payload = await res.json();
 
       this.selectedPayload = name;
@@ -174,6 +269,19 @@ class App {
       this.el.varGroupNumber.value = vars.groupNumber || '';
       this.el.varInvoiceMonth.value = vars.invoiceMonth || '';
       this.el.varInvoiceYear.value = vars.invoiceYear || '';
+
+      // Load maxSteps
+      this.el.maxSteps.value = payload.maxSteps || '';
+
+      // Load model settings
+      this.el.agentModel.value = payload.agentModel || '';
+      this.el.stagehandModel.value = payload.model || '';
+
+      // Load proxy and profile settings
+      this.el.proxyType.value = payload.proxyType || '';
+      this.el.proxyCountry.value = payload.proxyCountry || '';
+      this.el.profileName.value = payload.profileName || '';
+      this.updateProxyCountryVisibility();
 
       // Show credentials section if payload has stored credentials
       const hasStoredCredentials = vars.username === '***' || vars.password === '***';
@@ -193,6 +301,7 @@ class App {
 
       this.el.runBtn.disabled = false;
       this.el.saveBtn.disabled = false;
+      this.el.updateBtn.disabled = false;
     } catch (e) {
       this.setStatus('error', 'Load failed');
     }
@@ -209,6 +318,19 @@ class App {
     this.el.varInvoiceMonth.value = '';
     this.el.varInvoiceYear.value = '';
 
+    // Reset maxSteps
+    this.el.maxSteps.value = '';
+
+    // Reset model settings
+    this.el.agentModel.value = '';
+    this.el.stagehandModel.value = '';
+
+    // Reset proxy and profile settings
+    this.el.proxyType.value = '';
+    this.el.proxyCountry.value = '';
+    this.el.profileName.value = '';
+    this.updateProxyCountryVisibility();
+
     // Show credentials section for new payloads (to allow adding credentials)
     this.el.credentialsSection.style.display = 'block';
     this.el.varUsername.value = '';
@@ -222,6 +344,7 @@ class App {
 
     this.el.runBtn.disabled = true;
     this.el.saveBtn.disabled = false;
+    this.el.updateBtn.disabled = true;  // Can't update a new payload
     this.el.payloadUrl.focus();
   }
 
@@ -251,6 +374,63 @@ class App {
       this.el.credentialsStatus.textContent = hasStored ? 'Using stored' : 'Optional';
     }
     this.el.credentialsStatus.classList.toggle('custom', hasCustom);
+  }
+
+  // Proxy
+  updateProxyCountryVisibility() {
+    const hasProxy = this.el.proxyType.value !== '';
+    this.el.proxyCountryGroup.style.display = hasProxy ? 'block' : 'none';
+    // Reset country when proxy is disabled
+    if (!hasProxy) {
+      this.el.proxyCountry.value = '';
+    }
+  }
+
+  // App selection
+  updateAppVisibility() {
+    const isDriver = this.el.appSelect.value === 'driver';
+
+    // Show/hide driver-only elements (includes CUA model optgroup with Claude models)
+    document.querySelectorAll('.driver-only').forEach(el => {
+      el.style.display = isDriver ? '' : 'none';
+    });
+
+    // Reset CUA model selection when switching to Navigator (Claude models not available)
+    if (!isDriver && this.el.agentModel.value && this.el.agentModel.value.startsWith('anthropic/')) {
+      this.el.agentModel.value = '';
+    }
+  }
+
+  async onAppChange() {
+    this.updateAppVisibility();
+    // Clear current selection and reload payloads for the new app
+    this.selectedPayload = null;
+    this.originalPayload = null;
+    this.isNewPayload = false;
+    // Clear form fields
+    this.el.payloadUrl.value = '';
+    this.el.payloadInstruction.value = '';
+    this.el.varGroupNumber.value = '';
+    this.el.varInvoiceMonth.value = '';
+    this.el.varInvoiceYear.value = '';
+    this.el.maxSteps.value = '';
+    this.el.agentModel.value = '';
+    this.el.stagehandModel.value = '';
+    this.el.proxyType.value = '';
+    this.el.proxyCountry.value = '';
+    this.el.profileName.value = '';
+    this.updateProxyCountryVisibility();
+    // Reset credentials
+    this.el.varUsername.value = '';
+    this.el.varPassword.value = '';
+    this.el.varTotpSecret.value = '';
+    this.el.credentialsSection.classList.remove('expanded');
+    this.el.credentialsFields.style.display = 'none';
+    // Disable buttons until a payload is selected
+    this.el.runBtn.disabled = true;
+    this.el.updateBtn.disabled = true;
+    // Reload payload list for the selected app
+    await this.loadPayloads();
   }
 
   // Run
@@ -290,6 +470,7 @@ class App {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          app: this.el.appSelect.value,
           payloadName: this.selectedPayload,
           variableOverrides: {
             groupNumber: this.el.varGroupNumber.value,
@@ -299,7 +480,16 @@ class App {
             ...(this.el.varUsername.value && { username: this.el.varUsername.value }),
             ...(this.el.varPassword.value && { password: this.el.varPassword.value }),
             ...(this.el.varTotpSecret.value && { totpSecret: this.el.varTotpSecret.value }),
-          }
+          },
+          // Proxy and profile settings
+          ...(this.el.proxyType.value && { proxyType: this.el.proxyType.value }),
+          ...(this.el.proxyCountry.value && { proxyCountry: this.el.proxyCountry.value }),
+          ...(this.el.profileName.value && { profileName: this.el.profileName.value }),
+          // Max steps override
+          ...(this.el.maxSteps.value && { maxSteps: parseInt(this.el.maxSteps.value, 10) }),
+          // Model overrides
+          ...(this.el.agentModel.value && { agentModel: this.el.agentModel.value }),
+          ...(this.el.stagehandModel.value && { model: this.el.stagehandModel.value }),
         }),
         signal: this.abortController.signal,
       });
@@ -367,19 +557,31 @@ class App {
         break;
 
       case 'complete':
+        // Exit theater mode when session ends
+        this.exitTheaterMode();
+
         this.el.liveViewIframe.classList.remove('active');
         this.el.liveViewIframe.src = 'about:blank';
         this.el.liveViewPlaceholder.textContent = 'Session ended';
         this.el.liveViewPlaceholder.style.display = 'flex';
         this.el.liveViewStatus.textContent = 'Completed';
 
-        if (data.exitCode === 0) {
+        // Check both exit code AND result status to determine success/error
+        const resultStatus = data.result?.result?.status;
+        const isSuccess = data.exitCode === 0 && resultStatus === 'success';
+
+        if (isSuccess) {
           this.log('\n--- Completed ---\n', 'info');
           this.setStatus('success', 'Done');
           this.setTabStatus('complete');
-        } else {
+        } else if (data.exitCode !== 0) {
           this.log(`\n--- Exit code: ${data.exitCode} ---\n`, 'stderr');
           this.setStatus('error', `Exit ${data.exitCode}`);
+          this.setTabStatus('error');
+        } else {
+          // Exit code 0 but result status is not success (e.g., login_failed)
+          this.log('\n--- Completed with issues ---\n', 'stderr');
+          this.setStatus('error', resultStatus || 'Failed');
           this.setTabStatus('error');
         }
 
@@ -417,6 +619,25 @@ class App {
     span.textContent = this.stripAnsi(text);
     this.el.outputLog.appendChild(span);
     this.el.outputLog.scrollTop = this.el.outputLog.scrollHeight;
+  }
+
+  async copyOutput() {
+    const text = this.el.outputLog.textContent;
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      const btn = this.el.copyOutputBtn;
+      const originalText = btn.textContent;
+      btn.textContent = 'Copied!';
+      btn.classList.add('btn-success');
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.classList.remove('btn-success');
+      }, 1500);
+    } catch (e) {
+      this.setStatus('error', 'Copy failed');
+    }
   }
 
   showResult(result) {
@@ -473,6 +694,80 @@ class App {
     this.el.saveModal.classList.remove('active');
   }
 
+  // Update existing payload (save in place)
+  async update() {
+    if (!this.selectedPayload) {
+      this.setStatus('error', 'No payload selected');
+      return;
+    }
+
+    // Show saving state
+    const originalText = this.el.updateBtn.textContent;
+    this.el.updateBtn.textContent = 'Saving...';
+    this.el.updateBtn.disabled = true;
+
+    try {
+      const res = await fetch('/api/payloads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          app: this.el.appSelect.value,
+          name: this.selectedPayload,
+          payload: {
+            url: this.el.payloadUrl.value,
+            instruction: this.el.payloadInstruction.value,
+            maxSteps: this.el.maxSteps.value ? parseInt(this.el.maxSteps.value, 10) : (this.originalPayload?.maxSteps || 50),
+            // Model settings (include if set)
+            ...(this.el.agentModel.value && { agentModel: this.el.agentModel.value }),
+            ...(this.el.stagehandModel.value && { model: this.el.stagehandModel.value }),
+            // Proxy and profile settings (include if set, exclude if empty to remove from payload)
+            ...(this.el.proxyType.value && { proxyType: this.el.proxyType.value }),
+            ...(this.el.proxyCountry.value && { proxyCountry: this.el.proxyCountry.value }),
+            ...(this.el.profileName.value && { profileName: this.el.profileName.value }),
+            variables: {
+              ...(this.originalPayload?.variables || {}),
+              // Only include if non-empty
+              ...(this.el.varGroupNumber.value && { groupNumber: this.el.varGroupNumber.value }),
+              ...(this.el.varInvoiceMonth.value && { invoiceMonth: this.el.varInvoiceMonth.value }),
+              ...(this.el.varInvoiceYear.value && { invoiceYear: this.el.varInvoiceYear.value }),
+              // Include credentials if provided
+              ...(this.el.varUsername.value && { username: this.el.varUsername.value }),
+              ...(this.el.varPassword.value && { password: this.el.varPassword.value }),
+              ...(this.el.varTotpSecret.value && { totpSecret: this.el.varTotpSecret.value }),
+            },
+          },
+          originalName: this.selectedPayload,
+        }),
+      });
+
+      if (!res.ok) {
+        this.el.updateBtn.textContent = originalText;
+        this.el.updateBtn.disabled = false;
+        this.setStatus('error', 'Update failed');
+        return;
+      }
+
+      // Show saved confirmation
+      this.el.updateBtn.textContent = 'Saved!';
+      this.el.updateBtn.classList.add('btn-success');
+      this.setStatus('success', 'Saved');
+
+      // Reload to get fresh data (credentials masked, etc.)
+      await this.selectPayload(this.selectedPayload);
+
+      // Reset button after delay
+      setTimeout(() => {
+        this.el.updateBtn.textContent = originalText;
+        this.el.updateBtn.classList.remove('btn-success');
+        this.el.updateBtn.disabled = false;
+      }, 1500);
+    } catch {
+      this.el.updateBtn.textContent = originalText;
+      this.el.updateBtn.disabled = false;
+      this.setStatus('error', 'Update failed');
+    }
+  }
+
   async save() {
     const name = this.el.saveNameInput.value.trim();
     if (!name) return;
@@ -484,16 +779,25 @@ class App {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          app: this.el.appSelect.value,
           name: fileName,
           payload: {
             url: this.el.payloadUrl.value,
             instruction: this.el.payloadInstruction.value,
-            maxSteps: this.originalPayload?.maxSteps || 50,
+            maxSteps: this.el.maxSteps.value ? parseInt(this.el.maxSteps.value, 10) : (this.originalPayload?.maxSteps || 50),
+            // Model settings (only include if set)
+            ...(this.el.agentModel.value && { agentModel: this.el.agentModel.value }),
+            ...(this.el.stagehandModel.value && { model: this.el.stagehandModel.value }),
+            // Proxy and profile settings (only include if set)
+            ...(this.el.proxyType.value && { proxyType: this.el.proxyType.value }),
+            ...(this.el.proxyCountry.value && { proxyCountry: this.el.proxyCountry.value }),
+            ...(this.el.profileName.value && { profileName: this.el.profileName.value }),
             variables: {
               ...(this.originalPayload?.variables || {}),
-              groupNumber: this.el.varGroupNumber.value,
-              invoiceMonth: this.el.varInvoiceMonth.value,
-              invoiceYear: this.el.varInvoiceYear.value,
+              // Only include if non-empty
+              ...(this.el.varGroupNumber.value && { groupNumber: this.el.varGroupNumber.value }),
+              ...(this.el.varInvoiceMonth.value && { invoiceMonth: this.el.varInvoiceMonth.value }),
+              ...(this.el.varInvoiceYear.value && { invoiceYear: this.el.varInvoiceYear.value }),
               // Include credentials if provided (for new payloads)
               ...(this.el.varUsername.value && { username: this.el.varUsername.value }),
               ...(this.el.varPassword.value && { password: this.el.varPassword.value }),
@@ -825,6 +1129,25 @@ class App {
     }
   }
 
+  async copyHistoryLog() {
+    const text = this.el.historyLog.textContent;
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      const btn = this.el.historyCopyLogBtn;
+      const originalText = btn.textContent;
+      btn.textContent = 'Copied!';
+      btn.classList.add('btn-success');
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.classList.remove('btn-success');
+      }, 1500);
+    } catch (e) {
+      this.setStatus('error', 'Copy failed');
+    }
+  }
+
   hideHistoryDetail() {
     this.el.historyDetail.style.display = 'none';
     document.querySelector('.history-container').style.display = 'flex';
@@ -840,7 +1163,24 @@ class App {
     this.el.runBtn.addEventListener('click', () => this.run());
     this.el.stopBtn.addEventListener('click', () => this.stop());
     this.el.saveBtn.addEventListener('click', () => this.openSaveModal());
+    this.el.updateBtn.addEventListener('click', () => this.update());
+    this.el.copyOutputBtn.addEventListener('click', () => this.copyOutput());
     this.el.clearOutputBtn.addEventListener('click', () => this.el.outputLog.textContent = '');
+
+    // Theater mode
+    this.el.theaterModeBtn.addEventListener('click', () => this.toggleTheaterMode());
+
+    // Double-click overlay to toggle theater mode (overlay captures events since iframes don't bubble)
+    this.el.liveViewOverlay.addEventListener('dblclick', () => this.toggleTheaterMode());
+
+    // Click output card header to expand/collapse in theater mode
+    const outputCard = this.el.outputLog.closest('.card');
+    const outputHeader = outputCard.querySelector('.card-header');
+    outputHeader.addEventListener('click', () => {
+      if (this.theaterMode) {
+        outputCard.classList.toggle('expanded');
+      }
+    });
 
     // Tab switching
     this.el.tabEditor.addEventListener('click', () => this.switchTab('editor'));
@@ -852,6 +1192,7 @@ class App {
     this.el.historyBackBtn.addEventListener('click', () => this.hideHistoryDetail());
     this.el.historyDownloadVideo.addEventListener('click', (e) => this.toggleRecording(e));
     this.el.historyViewLog.addEventListener('click', () => this.toggleHistoryLog());
+    this.el.historyCopyLogBtn.addEventListener('click', () => this.copyHistoryLog());
     this.el.historyList.addEventListener('click', (e) => {
       const item = e.target.closest('.history-item');
       if (item?.dataset.sessionId) {
@@ -884,6 +1225,12 @@ class App {
     this.el.varPassword.addEventListener('input', () => this.updateCredentialsStatus());
     this.el.varTotpSecret.addEventListener('input', () => this.updateCredentialsStatus());
 
+    // Proxy type change handler
+    this.el.proxyType.addEventListener('change', () => this.updateProxyCountryVisibility());
+
+    // App selector change handler
+    this.el.appSelect.addEventListener('change', () => this.onAppChange());
+
     document.querySelectorAll('.variable-tag').forEach(tag => {
       tag.addEventListener('click', () => this.insertVariable(tag.dataset.var));
     });
@@ -895,15 +1242,40 @@ class App {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        this.openSaveModal();
+        if (this.selectedPayload && !this.isNewPayload) {
+          this.update();  // Update existing payload
+        } else {
+          this.openSaveModal();  // Save as new
+        }
       }
       if (e.key === 'Escape') {
-        if (this.el.resultsPanel.classList.contains('active')) {
+        if (this.theaterMode) {
+          this.exitTheaterMode();
+        } else if (this.el.resultsPanel.classList.contains('active')) {
           this.closeResultsPanel();
         } else if (this.el.saveModal.classList.contains('active')) {
           this.closeSaveModal();
         } else if (this.isRunning) {
           this.stop();
+        }
+      }
+      // 'T' key to toggle theater mode (when not typing and live view is visible)
+      if (e.key === 't' || e.key === 'T') {
+        const target = e.target;
+        const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+        const liveViewVisible = this.el.runningState.style.display !== 'none';
+        if (!isTyping && liveViewVisible) {
+          e.preventDefault();
+          this.toggleTheaterMode();
+        }
+      }
+      // '[' key to toggle sidebar (when not typing)
+      if (e.key === '[') {
+        const target = e.target;
+        const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+        if (!isTyping) {
+          e.preventDefault();
+          this.toggleSidebar();
         }
       }
     });

@@ -17,14 +17,20 @@ if (!KERNEL_API_KEY) {
 }
 
 // Paths
-const PAYLOADS_DIR = path.join(__dirname, '..', 'payloads');
+const APPS_DIR = path.join(__dirname, '..', 'apps');
 const PUBLIC_DIR = path.join(__dirname, 'public');
+
+// Get payloads directory for a specific app
+function getPayloadsDir(app) {
+  return path.join(APPS_DIR, app || 'driver', 'payloads');
+}
 
 // Sensitive keys that should never be exposed to frontend
 const SENSITIVE_KEYS = ['username', 'password', 'totpSecret'];
 
 // Regex to extract live view URL from kernel output
-const LIVE_VIEW_REGEX = /Kernel browser live view url:\s*(https?:\/\/[^\s\x1B]+)/i;
+// Matches: "Kernel browser live view url:", "[browser] Live view URL:", or "[browser] Live view:"
+const LIVE_VIEW_REGEX = /(?:Kernel browser live view url|\[browser\] Live view(?: URL)?):\s*(https?:\/\/[^\s\x1B]+)/i;
 
 // Strip ANSI escape codes from text
 function stripAnsi(text) {
@@ -221,10 +227,14 @@ function isValidPayloadName(name) {
   return /^[a-zA-Z0-9_-]+\.json$/.test(name) && !name.includes('..');
 }
 
-// GET /api/payloads - List all payload files
+// GET /api/payloads - List all payload files for an app
 app.get('/api/payloads', async (req, res) => {
   try {
-    const files = await fs.readdir(PAYLOADS_DIR);
+    const app = req.query.app || 'driver';
+    const payloadsDir = getPayloadsDir(app);
+    // Ensure directory exists
+    await fs.mkdir(payloadsDir, { recursive: true });
+    const files = await fs.readdir(payloadsDir);
     const payloads = files.filter(f => f.endsWith('.json')).sort();
     res.json(payloads);
   } catch (error) {
@@ -236,13 +246,14 @@ app.get('/api/payloads', async (req, res) => {
 // GET /api/payloads/:name - Get a single payload (sanitized)
 app.get('/api/payloads/:name', async (req, res) => {
   const { name } = req.params;
+  const app = req.query.app || 'driver';
 
   if (!isValidPayloadName(name)) {
     return res.status(400).json({ error: 'Invalid payload name' });
   }
 
   try {
-    const filePath = path.join(PAYLOADS_DIR, name);
+    const filePath = path.join(getPayloadsDir(app), name);
     const content = await fs.readFile(filePath, 'utf-8');
     const payload = JSON.parse(content);
     res.json(sanitizePayload(payload));
@@ -254,18 +265,22 @@ app.get('/api/payloads/:name', async (req, res) => {
 
 // POST /api/payloads - Save a new payload
 app.post('/api/payloads', async (req, res) => {
-  const { name, payload, originalName } = req.body;
+  const { name, payload, originalName, app = 'driver' } = req.body;
 
   if (!name || !isValidPayloadName(name)) {
     return res.status(400).json({ error: 'Invalid payload name' });
   }
 
+  const payloadsDir = getPayloadsDir(app);
+
   try {
+    // Ensure directory exists
+    await fs.mkdir(payloadsDir, { recursive: true });
     // If there's an original payload, merge credentials from it
     let finalPayload = { ...payload };
 
     if (originalName && isValidPayloadName(originalName)) {
-      const originalPath = path.join(PAYLOADS_DIR, originalName);
+      const originalPath = path.join(payloadsDir, originalName);
       const originalContent = await fs.readFile(originalPath, 'utf-8');
       const originalPayload = JSON.parse(originalContent);
 
@@ -279,7 +294,7 @@ app.post('/api/payloads', async (req, res) => {
       }
     }
 
-    const filePath = path.join(PAYLOADS_DIR, name);
+    const filePath = path.join(payloadsDir, name);
     await fs.writeFile(filePath, JSON.stringify(finalPayload, null, 2));
     res.json({ success: true, name });
   } catch (error) {
@@ -288,15 +303,26 @@ app.post('/api/payloads', async (req, res) => {
   }
 });
 
+// App configurations
+const APP_CONFIG = {
+  driver: { appName: 'driver', action: 'download-task' },
+  navigator: { appName: 'navigator', action: 'navigate-task' },
+};
+
 // POST /api/invoke - Run a payload with SSE streaming
 app.post('/api/invoke', async (req, res) => {
-  const { payloadName, variableOverrides } = req.body;
+  const { app = 'driver', payloadName, variableOverrides, proxyType, proxyCountry, profileName, maxSteps, agentModel, model } = req.body;
+
+  // Validate app selection
+  if (!APP_CONFIG[app]) {
+    return res.status(400).json({ error: 'Invalid app. Must be "driver" or "navigator"' });
+  }
 
   if (!payloadName || !isValidPayloadName(payloadName)) {
     return res.status(400).json({ error: 'Invalid payload name' });
   }
 
-  const payloadPath = path.join(PAYLOADS_DIR, payloadName);
+  const payloadPath = path.join(getPayloadsDir(app), payloadName);
 
   // Check if payload exists
   try {
@@ -310,18 +336,53 @@ app.post('/api/invoke', async (req, res) => {
   let tempPayloadPath = null;
 
   try {
-    if (variableOverrides && Object.keys(variableOverrides).length > 0) {
+    const hasVariableOverrides = variableOverrides && Object.keys(variableOverrides).length > 0;
+    const hasBotDetectionOverrides = proxyType || proxyCountry || profileName;
+    const hasMaxStepsOverride = maxSteps && !isNaN(maxSteps);
+    const hasModelOverrides = agentModel || model;
+
+    if (hasVariableOverrides || hasBotDetectionOverrides || hasMaxStepsOverride || hasModelOverrides) {
       // Read original payload
       const originalContent = await fs.readFile(payloadPath, 'utf-8');
       const payload = JSON.parse(originalContent);
 
       // Merge variable overrides (including credentials if explicitly provided)
-      if (payload.variables) {
+      if (hasVariableOverrides && payload.variables) {
         for (const [key, value] of Object.entries(variableOverrides)) {
           if (value !== undefined && value !== '') {
             payload.variables[key] = value;
           }
         }
+      }
+
+      // Apply bot detection overrides (top-level properties)
+      if (proxyType) {
+        payload.proxyType = proxyType;
+      }
+      if (proxyCountry) {
+        payload.proxyCountry = proxyCountry;
+      }
+      if (profileName) {
+        payload.profileName = profileName;
+      }
+
+      // Apply maxSteps override
+      if (hasMaxStepsOverride) {
+        payload.maxSteps = parseInt(maxSteps, 10);
+      }
+
+      // Apply model overrides
+      if (agentModel) {
+        if (app === 'navigator') {
+          // Navigator uses 'model' field for the Gemini model
+          payload.model = agentModel;
+        } else {
+          // Driver uses 'agentModel' for the CUA agent
+          payload.agentModel = agentModel;
+        }
+      }
+      if (model) {
+        payload.model = model;
       }
 
       // Write to temp file
@@ -363,14 +424,14 @@ app.post('/api/invoke', async (req, res) => {
   let taskResult = null;
 
   // Spawn kernel invoke process
+  const { appName, action } = APP_CONFIG[app];
   const proc = spawn('kernel', [
     'invoke',
-    'ts-stagehand-bb',
-    'download-task',
+    appName,
+    action,
     '--payload-file',
     effectivePayloadPath
   ], {
-    shell: true,
     env: { ...process.env, FORCE_COLOR: '0' }
   });
 
@@ -619,5 +680,5 @@ app.get('/api/history/:id/log', (req, res) => res.redirect(`/api/sessions/${req.
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`CUAV2 Playground listening on http://localhost:${PORT}`);
+  console.log(`CUA 2.0 Playground listening on http://localhost:${PORT}`);
 });

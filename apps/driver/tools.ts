@@ -73,7 +73,7 @@ export function createAgentTools(stagehand: Stagehand, credentials: Credentials)
             execute: async ({ site }: { site: string }) => {
                 console.log(`[perform_login] Login requested for site: ${site}`);
 
-                const { username, password, totpSecret: totpSecret } = credentials;
+                const { username, password, totpSecret, email2faProvider } = credentials;
 
                 if (!username || !password) {
                     return { success: false, error: "No credentials configured" };
@@ -132,9 +132,7 @@ export function createAgentTools(stagehand: Stagehand, credentials: Credentials)
                         await new Promise(resolve => setTimeout(resolve, 5000));
                     }
 
-                    // Check if 2FA is required (before checking login success)
-                    const email2faProvider = credentials.email2faProvider;
-
+                    // Check if 2FA is required (only if we have credentials to handle it)
                     if (totpSecret || email2faProvider) {
                         console.log('[perform_login] Checking for 2FA prompt...');
                         const tfaCheck = await stagehand.extract(
@@ -160,9 +158,6 @@ export function createAgentTools(stagehand: Stagehand, credentials: Credentials)
                                 })
                             );
                             console.log('[perform_login] Auth method check:', JSON.stringify(authMethodCheck));
-
-                            // Priority: TOTP/Authenticator first (if totpSecret provided), then Email (if email2faProvider provided)
-                            // We infer from what credentials are sent - totpSecret means use authenticator, email2faProvider means use email
 
                             // Handle TOTP-based 2FA (when totpSecret is provided)
                             if (totpSecret) {

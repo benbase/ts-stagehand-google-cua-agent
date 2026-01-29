@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Benbase - CUAV2 Playground</title>
+  <title>Benbase - CUA 2.0 Playground</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
 <body>
   <header class="header">
     <div class="header-left">
-      <button class="icon-btn" id="sidebar-toggle" title="Toggle sidebar">
+      <button class="icon-btn" id="sidebar-toggle" title="Toggle sidebar ([)">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
           <line x1="9" y1="3" x2="9" y2="21"></line>
@@ -20,7 +20,13 @@
       </button>
       <div>
         <h4>Benbase</h4>
-        <h5>CUAV2 Playground</h5>
+        <h5>CUA 2.0 Playground</h5>
+      </div>
+      <div class="header-app-selector">
+        <select id="app-select">
+          <option value="driver">Driver</option>
+          <option value="navigator">Navigator</option>
+        </select>
       </div>
     </div>
     <div class="header-right">
@@ -81,25 +87,108 @@
                 <input type="text" id="var-invoice-year" placeholder="2025">
               </div>
             </div>
-            <div class="form-group">
-              <label for="var-invoice-month">Month</label>
-              <select id="var-invoice-month">
-                <option value="">Select month</option>
-                <option value="January">January</option>
-                <option value="February">February</option>
-                <option value="March">March</option>
-                <option value="April">April</option>
-                <option value="May">May</option>
-                <option value="June">June</option>
-                <option value="July">July</option>
-                <option value="August">August</option>
-                <option value="September">September</option>
-                <option value="October">October</option>
-                <option value="November">November</option>
-                <option value="December">December</option>
-              </select>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="var-invoice-month">Month</label>
+                <select id="var-invoice-month">
+                  <option value="">Select month</option>
+                  <option value="January">January</option>
+                  <option value="February">February</option>
+                  <option value="March">March</option>
+                  <option value="April">April</option>
+                  <option value="May">May</option>
+                  <option value="June">June</option>
+                  <option value="July">July</option>
+                  <option value="August">August</option>
+                  <option value="September">September</option>
+                  <option value="October">October</option>
+                  <option value="November">November</option>
+                  <option value="December">December</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="max-steps">Max Steps</label>
+                <input type="number" id="max-steps" placeholder="50" min="10" max="200">
+                <span class="form-hint">Agent action limit (10-200)</span>
+              </div>
             </div>
-            <div class="credentials-section" id="credentials-section" style="display: none;">
+            <!-- Model Settings -->
+            <div class="models-section">
+              <div class="form-group">
+                <label for="agent-model">CUA Model (Visual Navigation)</label>
+                <select id="agent-model">
+                  <option value="">Gemini 2.5 Computer Use (Default)</option>
+                  <optgroup label="Other Models" class="driver-only">
+                    <option value="anthropic/claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                    <option value="anthropic/claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
+                    <option value="anthropic/computer-use-preview-2025-03-11">Anthropic CU Preview</option>
+                  </optgroup>
+                </select>
+                <span class="form-hint">Screenshot-based navigation</span>
+              </div>
+              <div class="form-group driver-only">
+                <label for="stagehand-model">Stagehand Model (DOM Operations)</label>
+                <select id="stagehand-model">
+                  <option value="">Claude Sonnet 4.5 (Default)</option>
+                  <optgroup label="Anthropic">
+                    <option value="anthropic/claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                    <option value="anthropic/claude-opus-4-5-20251101">Claude Opus 4.5</option>
+                  </optgroup>
+                  <optgroup label="OpenAI">
+                    <option value="openai/gpt-4.1">GPT-4.1</option>
+                    <option value="openai/gpt-4o">GPT-4o</option>
+                    <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
+                    <option value="openai/gpt-5.1-2025-11-13">GPT-5.1</option>
+                    <option value="openai/gpt-5.2">GPT-5.2</option>
+                  </optgroup>
+                  <optgroup label="Google">
+                    <option value="google/gemini-3-pro-preview">Gemini 3 Pro</option>
+                    <option value="google/gemini-3-flash-preview">Gemini 3 Flash</option>
+                  </optgroup>
+                  <optgroup label="Other">
+                    <option value="xai/grok-4-1-fast-reasoning">Grok 4.1</option>
+                  </optgroup>
+                </select>
+                <span class="form-hint">Login, form filling, extraction</span>
+              </div>
+            </div>
+
+            <!-- Bot Detection Settings -->
+            <div class="proxy-section">
+              <div class="form-group">
+                <label for="proxy-type">Proxy</label>
+                <select id="proxy-type">
+                  <option value="">None (direct connection)</option>
+                  <option value="mobile">Mobile (Best for bot detection)</option>
+                  <option value="residential">Residential</option>
+                  <option value="isp">ISP</option>
+                  <option value="datacenter">Datacenter (Fastest)</option>
+                </select>
+              </div>
+              <div class="form-group proxy-country-group" id="proxy-country-group" style="display: none;">
+                <label for="proxy-country">Proxy Location</label>
+                <select id="proxy-country">
+                  <option value="">Auto</option>
+                  <option value="US">United States</option>
+                  <option value="GB">United Kingdom</option>
+                  <option value="CA">Canada</option>
+                  <option value="AU">Australia</option>
+                  <option value="DE">Germany</option>
+                  <option value="FR">France</option>
+                  <option value="NL">Netherlands</option>
+                  <option value="JP">Japan</option>
+                  <option value="SG">Singapore</option>
+                  <option value="BR">Brazil</option>
+                </select>
+              </div>
+              <div class="form-group driver-only">
+                <label for="profile-name">Session Profile</label>
+                <input type="text" id="profile-name" placeholder="e.g., rippling-session (persists cookies)">
+                <span class="form-hint">Reuse cookies/session across runs to appear as returning user</span>
+              </div>
+            </div>
+
+            <div class="credentials-section driver-only" id="credentials-section" style="display: none;">
               <div class="credentials-header" id="credentials-toggle">
                 <span class="credentials-label">Credentials</span>
                 <span class="credentials-status" id="credentials-status">Using stored</span>
@@ -132,7 +221,8 @@
         <button class="btn btn-primary" id="run-btn" disabled>
           <span id="run-btn-text">Run</span>
         </button>
-        <button class="btn" id="save-btn" disabled>Save as New</button>
+        <button class="btn" id="update-btn" disabled>Save</button>
+        <button class="btn" id="save-btn" disabled>Save as...</button>
         <button class="btn btn-danger" id="stop-btn" style="display: none;">Stop</button>
       </div>
     </section>
@@ -177,12 +267,26 @@
         <!-- Running State -->
         <div class="running-state" id="running-state" style="display: none;">
         <!-- Live View -->
-        <div class="card card-grow">
+        <div class="card card-grow" id="live-view-card">
           <div class="card-header">
             <h2>Live View</h2>
             <div class="card-actions">
               <span id="live-view-status">Connecting...</span>
               <a href="#" id="live-view-link" target="_blank" style="display: none;">Open</a>
+              <button class="icon-btn icon-btn-sm" id="theater-mode-btn" title="Theater mode (T)">
+                <svg id="theater-expand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <polyline points="9 21 3 21 3 15"></polyline>
+                  <line x1="21" y1="3" x2="14" y2="10"></line>
+                  <line x1="3" y1="21" x2="10" y2="14"></line>
+                </svg>
+                <svg id="theater-collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+                  <polyline points="4 14 10 14 10 20"></polyline>
+                  <polyline points="20 10 14 10 14 4"></polyline>
+                  <line x1="14" y1="10" x2="21" y2="3"></line>
+                  <line x1="3" y1="21" x2="10" y2="14"></line>
+                </svg>
+              </button>
             </div>
           </div>
           <div class="live-view-wrapper">
@@ -190,6 +294,9 @@
               Waiting for browser...
             </div>
             <iframe class="live-view-iframe" id="live-view-iframe"></iframe>
+            <!-- Transparent overlay to capture double-click for theater mode (iframes capture events) -->
+            <div class="live-view-overlay" id="live-view-overlay"></div>
+            <div class="theater-hint">Double-click or press T for theater mode</div>
           </div>
         </div>
 
@@ -205,10 +312,16 @@
         <div class="card">
           <div class="card-header">
             <h2>Output</h2>
-            <button class="btn btn-sm" id="clear-output-btn">Clear</button>
+            <div class="card-actions">
+              <button class="btn btn-sm" id="copy-output-btn">Copy</button>
+              <button class="btn btn-sm" id="clear-output-btn">Clear</button>
+            </div>
           </div>
           <pre class="output-log" id="output-log"></pre>
         </div>
+
+        <!-- Theater mode exit hint -->
+        <div class="theater-exit-hint">Press Esc to exit theater mode</div>
         </div>
       </div>
 
@@ -262,7 +375,10 @@
               </div>
             </div>
             <div class="history-log-container" id="history-log-container" style="display: none;">
-              <h4>Session Log</h4>
+              <div class="history-log-header">
+                <h4>Session Log</h4>
+                <button class="btn btn-sm" id="history-copy-log-btn">Copy</button>
+              </div>
               <pre class="history-log" id="history-log"></pre>
             </div>
           </div>

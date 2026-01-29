@@ -1,0 +1,13 @@
+{
+  "url": "https://login.guardianlife.com/",
+  "instruction": "Log in to Guardian Life and navigate to the billing section to download the %invoiceMonth% %invoiceYear% invoice for Group ID %groupNumber%.",
+  "maxSteps": 50,
+  "variables": {
+    "username": "benbase21",
+    "password": "!hm.M*EENPPD9@2V",
+    "email2faProvider": "Guardian",
+    "groupNumber": "00811260",
+    "invoiceMonth": "January",
+    "invoiceYear": "2026"
+  }
+}

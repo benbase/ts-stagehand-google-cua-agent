@@ -6,6 +6,9 @@ export interface DownloadTaskInput {
     agentModel?: string; // Computer Use Agent model for executing task instructions
     systemPrompt?: string; // System prompt for the Computer Use Agent
     variables?: Record<string, string>; // Credentials (username, password, totp_secret) - NEVER exposed to LLM, used internally by perform_login tool
+    proxyType?: 'mobile' | 'residential' | 'isp' | 'datacenter'; // Proxy type for bot detection avoidance (best to worst: mobile > residential > isp > datacenter)
+    proxyCountry?: string; // ISO country code for proxy geolocation (e.g., 'US', 'GB')
+    profileName?: string; // Browser profile name to persist cookies/session across runs (helps bypass bot detection)
 }
 
 // Structured result status - discriminated union for type-safe outcomes
