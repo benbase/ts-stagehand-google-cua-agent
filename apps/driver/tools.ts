@@ -80,32 +80,110 @@ export function createAgentTools(stagehand: Stagehand, credentials: Credentials)
                 }
 
                 try {
+                    // Wait for login form to be present before filling credentials
+                    console.log('[perform_login] Waiting for login form to load...');
+                    let loginFormFound = false;
+                    for (let i = 0; i < 10; i++) {
+                        const formCheck = await stagehand.extract(
+                            "Check if there is a text input field (textbox) visible on the current page where a user would type their username, email address, user ID, Healthcare ID, or any login identifier. This could be labeled as 'Username', 'Email', 'ID', 'Healthcare ID', 'One Healthcare ID', or similar.",
+                            z.object({
+                                hasLoginInput: z.boolean().describe("true if there is a text input/textbox for entering login credentials"),
+                            })
+                        );
+                        if (formCheck.hasLoginInput) {
+                            console.log('[perform_login] Login input field detected');
+                            loginFormFound = true;
+                            break;
+                        }
+                        console.log(`[perform_login] Login form not ready yet, waiting... (${i + 1}/10)`);
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
+
+                    // If no login form found, try clicking a login button/link to navigate to login page
+                    if (!loginFormFound) {
+                        console.log('[perform_login] No login form found, attempting to click login button/link...');
+                        try {
+                            await stagehand.act("Click the 'Log In', 'Sign In', or login button/link to navigate to the login page");
+                            console.log('[perform_login] Clicked login button, waiting for login page...');
+                            await new Promise(resolve => setTimeout(resolve, 3000));
+
+                            // Wait again for login form
+                            for (let i = 0; i < 10; i++) {
+                                const formCheck = await stagehand.extract(
+                                    "Check if there is a text input field (textbox) for username, email, Healthcare ID, or login identifier.",
+                                    z.object({
+                                        hasLoginInput: z.boolean().describe("true if there is a text input for login credentials"),
+                                    })
+                                );
+                                if (formCheck.hasLoginInput) {
+                                    console.log('[perform_login] Login input field now detected');
+                                    loginFormFound = true;
+                                    break;
+                                }
+                                console.log(`[perform_login] Still waiting for login form... (${i + 1}/10)`);
+                                await new Promise(resolve => setTimeout(resolve, 2000));
+                            }
+                        } catch (e) {
+                            console.log('[perform_login] Could not find/click login button');
+                        }
+                    }
+
                     // Fill username - %username% is substituted locally, NEVER sent to LLM
                     console.log('[perform_login] Filling username...');
-                    await stagehand.act("Type %username% into the username, email, user ID, or login field", { variables: { username } });
+                    await stagehand.act("Type %username% into the text input field (textbox) for username, email, Healthcare ID, or login identifier. Do NOT click any links or buttons.", { variables: { username } });
+
+                    // Verify username was actually entered (not just a link clicked)
+                    console.log('[perform_login] Verifying username was entered...');
+                    const usernameCheck = await stagehand.extract(
+                        "Check if there is text entered in the username/email/ID input field. The field should contain some text value, not be empty.",
+                        z.object({
+                            hasTextEntered: z.boolean().describe("true if the input field has text entered in it"),
+                        })
+                    );
+                    if (!usernameCheck.hasTextEntered) {
+                        console.log('[perform_login] Username field appears empty, retrying...');
+                        await stagehand.act("Click on the text input field for username/email/Healthcare ID, then type %username%", { variables: { username } });
+                    }
 
                     // Check if this is a multi-step login (password field not visible yet)
-                    console.log('[perform_login] Checking for multi-step login flow...');
+                    console.log('[perform_login] Checking for password field...');
                     const pageState = await stagehand.extract(
-                        "Check if there is a visible password input field on the current page. Also check if there is a 'Continue', 'Next', or similar button (not 'Sign In' or 'Log In').",
+                        "Check if there is a visible password input field on the current page (an input with type='password' or explicitly labeled 'Password').",
                         z.object({
                             hasPasswordField: z.boolean().describe("true if a password input field is currently visible"),
-                            hasContinueButton: z.boolean().describe("true if there's a Continue/Next button visible"),
                         })
                     );
                     console.log('[perform_login] Page state:', JSON.stringify(pageState));
 
-                    // Multi-step flow: click Continue to get to password page
-                    if (!pageState.hasPasswordField && pageState.hasContinueButton) {
-                        console.log('[perform_login] Multi-step login detected, clicking Continue...');
-                        await stagehand.act("Click the Continue or Next button");
-                        console.log('[perform_login] Waiting for password page...');
+                    // Multi-step flow: if no password field, need to advance to get to password page
+                    if (!pageState.hasPasswordField) {
+                        console.log('[perform_login] No password field visible - this is a multi-step login');
+                        console.log('[perform_login] Clicking Continue/Next to advance to password page...');
+                        await stagehand.act("Click the Continue or Next button to proceed to the next step");
+                        console.log('[perform_login] Waiting for password page to load...');
                         await new Promise(resolve => setTimeout(resolve, 3000));
+
+                        // Wait for password field to appear
+                        console.log('[perform_login] Waiting for password field to appear...');
+                        for (let i = 0; i < 5; i++) {
+                            const passwordCheck = await stagehand.extract(
+                                "Check if there is a visible password input field on the current page.",
+                                z.object({
+                                    hasPasswordField: z.boolean().describe("true if a password input field is visible"),
+                                })
+                            );
+                            if (passwordCheck.hasPasswordField) {
+                                console.log('[perform_login] Password field appeared');
+                                break;
+                            }
+                            console.log(`[perform_login] Password field not visible yet, waiting... (${i + 1}/5)`);
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                        }
                     }
 
                     // Fill password - %password% is substituted locally, NEVER sent to LLM
                     console.log('[perform_login] Filling password...');
-                    await stagehand.act("Type %password% into the password field", { variables: { password } });
+                    await stagehand.act("Type %password% into the password input field", { variables: { password } });
 
                     // Submit login (could be Continue, Sign In, Log In, Submit)
                     console.log('[perform_login] Submitting login form...');
