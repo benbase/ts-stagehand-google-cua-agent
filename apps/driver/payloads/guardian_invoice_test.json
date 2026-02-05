@@ -1,12 +1,9 @@
 {
-  "url": "https://login.guardianlife.com/",
-  "instruction": "OBJECTIVE: Download the %invoiceMonth% %invoiceYear% invoice for Group ID %groupNumber%.\n\nSTEP 1 - LOGIN:\nCall perform_login tool. It will handle email-based 2FA automatically. If it returns success=false, immediately call report_result with status 'login_failed'.\n\nSTEP 2 - NAVIGATE TO CLIENT BILLING:\nAfter login, navigate to: https://www.guardiananytime.com/producer/groupsearch/clientbilling\nWait for 'Company Search' section to appear.\n\nSTEP 3 - SEARCH FOR GROUP:\n1. Type %groupNumber% into the 'Group Id' field\n2. Click Search button\n3. Wait for results (if you see 'null' error, click Search again)\n4. If 'Producer not found' appears, report 'group_not_found'\n\nSTEP 4 - FIND AND DOWNLOAD INVOICE:\n1. On the billing overview page, scroll to the bottom and click 'View previous statements'\n2. Wait for the statements page to load\n3. Find the %invoiceMonth% %invoiceYear% invoice (dates displayed in MM/DD/YYYY format)\n4. CRITICAL: Verify the invoice date is EXACTLY %invoiceMonth% %invoiceYear%\n   - If the EXACT date is NOT available, report 'download_failed' with what dates were actually available\n5. Click the PDF button/icon for the matching invoice - it will download automatically\n6. Wait a few seconds for the download to complete\n\nSTEP 5 - REPORT RESULT:\nCall report_result with:\n- 'success' + filename if the PDF downloaded successfully\n- 'login_failed' if login or 2FA failed\n- 'group_not_found' + groupId if group %groupNumber% was not found\n- 'document_not_found' if group found but no invoices visible at all\n- 'download_failed' if invoices exist but %invoiceMonth% %invoiceYear% is not available (list available dates in reason)\n\nCRITICAL RULES:\n- Use perform_login tool - do NOT manually enter credentials\n- Dismiss popups, banners, modals immediately\n- Wait for pages to load before proceeding",
+  "instruction": "You are at %url% for carrier %carrier%.\n\nLocate the group client (Group Number %groupNumber%).\n\nThen find and download the invoice for %invoiceMonth% %invoiceYear%.\n\nBest practices for Guardian:\n- If search returns an error, try again.",
   "maxSteps": 100,
   "model": "openai/gpt-4o",
   "variables": {
-    "username": "benbase21",
-    "password": "!hm.M*EENPPD9@2V",
-    "email2faProvider": "Guardian",
+    "carrier": "guardian",
     "groupNumber": "00811260",
     "invoiceMonth": "December",
     "invoiceYear": "2025"

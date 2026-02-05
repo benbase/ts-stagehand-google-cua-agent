@@ -6,7 +6,7 @@ const fs = require('fs').promises;
 const { spawn } = require('child_process');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const DEFAULT_PORT = process.env.PORT || 3001;
 
 // Kernel API configuration
 const KERNEL_API_BASE = 'https://api.onkernel.com';
@@ -19,6 +19,9 @@ if (!KERNEL_API_KEY) {
 // Paths
 const APPS_DIR = path.join(__dirname, '..', 'apps');
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const SHARED_PAYLOADS_DIR = path.join(APPS_DIR, 'shared', 'payloads');
+const CARRIERS_DIR = path.join(APPS_DIR, 'shared', 'carriers');
+const BENADMIN_DIR = path.join(APPS_DIR, 'shared', 'benadmin');
 
 // Get payloads directory for a specific app
 function getPayloadsDir(app) {
@@ -30,7 +33,7 @@ const SENSITIVE_KEYS = ['username', 'password', 'totpSecret'];
 
 // Regex to extract live view URL from kernel output
 // Matches: "Kernel browser live view url:", "[browser] Live view URL:", or "[browser] Live view:"
-const LIVE_VIEW_REGEX = /(?:Kernel browser live view url|\[browser\] Live view(?: URL)?):\s*(https?:\/\/[^\s\x1B]+)/i;
+const LIVE_VIEW_REGEX = /(?:Kernel browser live view url|\[browser] Live view(?: URL)?):\s*(https?:\/\/[^\s\x1B]+)/i;
 
 // Strip ANSI escape codes from text
 function stripAnsi(text) {
@@ -104,7 +107,10 @@ async function listReplays(sessionId) {
 
     const data = await response.json();
     console.log('Replays API response:', JSON.stringify(data));
-    // Handle both array and object response formats
+    // Handle null, array, and object response formats
+    if (!data) {
+      return [];
+    }
     if (Array.isArray(data)) {
       return data;
     }
@@ -152,14 +158,14 @@ async function downloadReplay(sessionId, replayId, localPath) {
   }
 }
 
-// Get or create session directory
-function getSessionDir(sessionId) {
-  return path.join(RESULTS_DIR, sessionId);
+// Get or create session directory (organized by app)
+function getSessionDir(appName, sessionId) {
+  return path.join(RESULTS_DIR, appName, sessionId);
 }
 
 // Save session data (recordings, logs, metadata)
-async function saveSessionData(sessionId, payloadName, log, result, exitCode, downloadedFiles = []) {
-  const sessionDir = getSessionDir(sessionId);
+async function saveSessionData(appName, sessionId, payloadName, log, result, exitCode, downloadedFiles = []) {
+  const sessionDir = getSessionDir(appName, sessionId);
 
   try {
     await fs.mkdir(sessionDir, { recursive: true });
@@ -167,6 +173,7 @@ async function saveSessionData(sessionId, payloadName, log, result, exitCode, do
     // Save metadata
     const metadata = {
       sessionId,
+      app: appName,
       payloadName,
       timestamp: new Date().toISOString(),
       exitCode,
@@ -209,6 +216,14 @@ async function saveSessionData(sessionId, payloadName, log, result, exitCode, do
 app.use(express.json());
 app.use(express.static(PUBLIC_DIR));
 
+// Disable caching for API endpoints so payload changes are immediately visible
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 // Utility: Sanitize payload by masking sensitive values
 function sanitizePayload(payload) {
   const sanitized = JSON.parse(JSON.stringify(payload));
@@ -224,19 +239,47 @@ function sanitizePayload(payload) {
 
 // Utility: Validate payload name to prevent path traversal
 function isValidPayloadName(name) {
-  return /^[a-zA-Z0-9_-]+\.json$/.test(name) && !name.includes('..');
+  // Allow shared/ prefix and .md extension
+  const cleanName = name.replace(/^shared\//, '');
+  return /^[a-zA-Z0-9_-]+\.(json|md)$/.test(cleanName) && !name.includes('..');
 }
 
-// GET /api/payloads - List all payload files for an app
+// Utility: Get full path for a payload (handles shared/ prefix)
+function getPayloadPath(name, app) {
+  if (name.startsWith('shared/')) {
+    const cleanName = name.replace(/^shared\//, '');
+    return path.join(SHARED_PAYLOADS_DIR, cleanName);
+  }
+  return path.join(getPayloadsDir(app), name);
+}
+
+// GET /api/payloads - List all payload files for an app (includes shared payloads)
 app.get('/api/payloads', async (req, res) => {
   try {
     const app = req.query.app || 'driver';
     const payloadsDir = getPayloadsDir(app);
-    // Ensure directory exists
+
+    // Ensure directories exist
     await fs.mkdir(payloadsDir, { recursive: true });
-    const files = await fs.readdir(payloadsDir);
-    const payloads = files.filter(f => f.endsWith('.json')).sort();
-    res.json(payloads);
+    await fs.mkdir(SHARED_PAYLOADS_DIR, { recursive: true });
+
+    // Get app-specific payloads
+    const appFiles = await fs.readdir(payloadsDir);
+    const appPayloads = appFiles
+      .filter(f => f.endsWith('.json') || f.endsWith('.md'))
+      .map(f => ({ name: f, source: 'app' }));
+
+    // Get shared payloads
+    const sharedFiles = await fs.readdir(SHARED_PAYLOADS_DIR);
+    const sharedPayloads = sharedFiles
+      .filter(f => f.endsWith('.json') || f.endsWith('.md'))
+      .map(f => ({ name: `shared/${f}`, source: 'shared' }));
+
+    // Combine and sort
+    const allPayloads = [...appPayloads, ...sharedPayloads]
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json(allPayloads);
   } catch (error) {
     console.error('Error listing payloads:', error);
     res.status(500).json({ error: 'Failed to list payloads' });
@@ -244,7 +287,8 @@ app.get('/api/payloads', async (req, res) => {
 });
 
 // GET /api/payloads/:name - Get a single payload (sanitized)
-app.get('/api/payloads/:name', async (req, res) => {
+// Supports wildcard (*) to match shared/ prefix
+app.get('/api/payloads/:name(*)', async (req, res) => {
   const { name } = req.params;
   const app = req.query.app || 'driver';
 
@@ -253,10 +297,41 @@ app.get('/api/payloads/:name', async (req, res) => {
   }
 
   try {
-    const filePath = path.join(getPayloadsDir(app), name);
+    const filePath = getPayloadPath(name, app);
     const content = await fs.readFile(filePath, 'utf-8');
+
+    // Handle markdown files differently - return as-is with type indicator
+    if (name.endsWith('.md')) {
+      res.json({
+        type: 'markdown',
+        name,
+        content,
+        isShared: name.startsWith('shared/'),
+      });
+      return;
+    }
+
+    // JSON payloads - sanitize and return
     const payload = JSON.parse(content);
-    res.json(sanitizePayload(payload));
+
+    // Check if payload has its own instruction or should use master
+    const hasCustomInstruction = payload.instruction && payload.instruction.trim().length > 0;
+
+    // If no custom instruction, load master prompt
+    let instruction = payload.instruction;
+    if (!hasCustomInstruction) {
+      const masterPrompt = await loadMasterPrompt();
+      if (masterPrompt) {
+        instruction = masterPrompt;
+      }
+    }
+
+    res.json({
+      type: 'json',
+      isShared: name.startsWith('shared/'),
+      usesMasterPrompt: !hasCustomInstruction,
+      ...sanitizePayload({ ...payload, instruction }),
+    });
   } catch (error) {
     console.error('Error reading payload:', error);
     res.status(404).json({ error: 'Payload not found' });
@@ -265,36 +340,63 @@ app.get('/api/payloads/:name', async (req, res) => {
 
 // POST /api/payloads - Save a new payload
 app.post('/api/payloads', async (req, res) => {
-  const { name, payload, originalName, app = 'driver' } = req.body;
+  const { name, payload, content, originalName, app = 'driver' } = req.body;
 
   if (!name || !isValidPayloadName(name)) {
     return res.status(400).json({ error: 'Invalid payload name' });
   }
 
-  const payloadsDir = getPayloadsDir(app);
+  // Determine target directory based on shared/ prefix
+  const isShared = name.startsWith('shared/');
+  const cleanName = isShared ? name.replace(/^shared\//, '') : name;
+  const targetDir = isShared ? SHARED_PAYLOADS_DIR : getPayloadsDir(app);
+  const filePath = path.join(targetDir, cleanName);
 
   try {
     // Ensure directory exists
-    await fs.mkdir(payloadsDir, { recursive: true });
-    // If there's an original payload, merge credentials from it
+    await fs.mkdir(targetDir, { recursive: true });
+
+    // Handle markdown files
+    if (name.endsWith('.md')) {
+      await fs.writeFile(filePath, content || '');
+      res.json({ success: true, name });
+      return;
+    }
+
+    // Handle JSON payloads
     let finalPayload = { ...payload };
 
     if (originalName && isValidPayloadName(originalName)) {
-      const originalPath = path.join(payloadsDir, originalName);
-      const originalContent = await fs.readFile(originalPath, 'utf-8');
-      const originalPayload = JSON.parse(originalContent);
+      const originalPath = getPayloadPath(originalName, app);
+      try {
+        const originalContent = await fs.readFile(originalPath, 'utf-8');
+        const originalPayload = JSON.parse(originalContent);
 
-      // Merge sensitive values from original if they're masked
-      if (finalPayload.variables && originalPayload.variables) {
-        for (const key of SENSITIVE_KEYS) {
-          if (finalPayload.variables[key] === '***' && originalPayload.variables[key]) {
-            finalPayload.variables[key] = originalPayload.variables[key];
+        // Handle sensitive values:
+        // - If new value is missing or '***' -> preserve from original
+        // - If new value is '__CLEAR__' -> explicitly remove (don't preserve)
+        // - If new value is a real value -> use the new value
+        if (originalPayload.variables) {
+          finalPayload.variables = finalPayload.variables || {};
+          for (const key of SENSITIVE_KEYS) {
+            const newValue = finalPayload.variables[key];
+            const originalValue = originalPayload.variables[key];
+
+            if (newValue === '__CLEAR__') {
+              // Explicit clear - remove from payload
+              delete finalPayload.variables[key];
+            } else if ((!newValue || newValue === '***') && originalValue) {
+              // Missing or masked - preserve original
+              finalPayload.variables[key] = originalValue;
+            }
+            // else: new value provided, use it as-is
           }
         }
+      } catch (e) {
+        // Original file doesn't exist or isn't JSON, that's OK
       }
     }
 
-    const filePath = path.join(payloadsDir, name);
     await fs.writeFile(filePath, JSON.stringify(finalPayload, null, 2));
     res.json({ success: true, name });
   } catch (error) {
@@ -303,26 +405,187 @@ app.post('/api/payloads', async (req, res) => {
   }
 });
 
+// GET /api/master-prompt - Get the master prompt template
+app.get('/api/master-prompt', async (req, res) => {
+  try {
+    const content = await loadMasterPrompt();
+    if (!content) {
+      return res.status(404).json({ error: 'Master prompt not found' });
+    }
+    res.json({ content });
+  } catch (error) {
+    console.error('Error loading master prompt:', error);
+    res.status(500).json({ error: 'Failed to load master prompt' });
+  }
+});
+
+// PUT /api/master-prompt - Update the master prompt template
+app.put('/api/master-prompt', async (req, res) => {
+  const { content } = req.body;
+
+  if (typeof content !== 'string') {
+    return res.status(400).json({ error: 'Content must be a string' });
+  }
+
+  try {
+    await fs.writeFile(MASTER_PROMPT_PATH, content);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving master prompt:', error);
+    res.status(500).json({ error: 'Failed to save master prompt' });
+  }
+});
+
+// GET /api/carriers - List all carrier configs with display names (from both carriers and benadmin dirs)
+app.get('/api/carriers', async (req, res) => {
+  try {
+    await fs.mkdir(CARRIERS_DIR, { recursive: true });
+    await fs.mkdir(BENADMIN_DIR, { recursive: true });
+
+    // Helper to load carriers from a directory with a specific email2faSource
+    const loadFromDir = async (dir, email2faSource) => {
+      try {
+        const files = await fs.readdir(dir);
+        const jsonFiles = files.filter(f => f.endsWith('.json'));
+        return Promise.all(
+          jsonFiles.map(async (f) => {
+            const id = f.replace('.json', '');
+            try {
+              const content = await fs.readFile(path.join(dir, f), 'utf-8');
+              const config = JSON.parse(content);
+              return {
+                id,
+                name: config.name || id,
+                url: config.url || '',
+                email2faSource,
+              };
+            } catch {
+              return { id, name: id, url: '', email2faSource };
+            }
+          })
+        );
+      } catch {
+        return [];
+      }
+    };
+
+    // Load from both directories
+    const [carriersFromCarriers, carriersFromBenadmin] = await Promise.all([
+      loadFromDir(CARRIERS_DIR, 'carrier'),
+      loadFromDir(BENADMIN_DIR, 'benadmin'),
+    ]);
+
+    // Combine and sort by name
+    const allCarriers = [...carriersFromCarriers, ...carriersFromBenadmin]
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json(allCarriers);
+  } catch (error) {
+    console.error('Error listing carriers:', error);
+    res.status(500).json({ error: 'Failed to list carriers' });
+  }
+});
+
+// GET /api/carriers/:name - Get a single carrier config (credentials sanitized)
+// Supports ?source=carrier or ?source=benadmin to specify which directory
+app.get('/api/carriers/:name', async (req, res) => {
+  const { name } = req.params;
+  const { source } = req.query;
+
+  // Validate name to prevent path traversal
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+    return res.status(400).json({ error: 'Invalid carrier name' });
+  }
+
+  try {
+    const carrier = await loadCarrierConfig(name, source);
+    if (!carrier) {
+      return res.status(404).json({ error: 'Carrier not found' });
+    }
+
+    // Sanitize credentials for frontend display
+    const sanitized = { ...carrier };
+    if (sanitized.credentials) {
+      sanitized.credentials = { ...sanitized.credentials };
+      for (const key of SENSITIVE_KEYS) {
+        if (key in sanitized.credentials) {
+          sanitized.credentials[key] = '***';
+        }
+      }
+    }
+
+    res.json(sanitized);
+  } catch (error) {
+    console.error('Error reading carrier:', error);
+    res.status(404).json({ error: 'Carrier not found' });
+  }
+});
+
+// Helper: Load carrier config (with actual credentials) - checks both carriers and benadmin dirs
+async function loadCarrierConfig(carrierName, source = null) {
+  if (!carrierName || !/^[a-zA-Z0-9_-]+$/.test(carrierName)) {
+    return null;
+  }
+
+  // If source is specified, only look in that directory
+  const dirsToCheck = source === 'benadmin' ? [BENADMIN_DIR] :
+                      source === 'carrier' ? [CARRIERS_DIR] :
+                      [CARRIERS_DIR, BENADMIN_DIR]; // Check both if not specified
+
+  for (const dir of dirsToCheck) {
+    try {
+      const filePath = path.join(dir, `${carrierName}.json`);
+      const content = await fs.readFile(filePath, 'utf-8');
+      const config = JSON.parse(content);
+      // Add email2faSource based on which directory it was found in
+      config.email2faSource = dir === BENADMIN_DIR ? 'benadmin' : 'carrier';
+      return config;
+    } catch {
+      // Not found in this directory, try next
+    }
+  }
+  return null;
+}
+
+// Master prompt template path
+const MASTER_PROMPT_PATH = path.join(SHARED_PAYLOADS_DIR, 'download_invoice.md');
+
+// Helper: Load master prompt template
+async function loadMasterPrompt() {
+  try {
+    return await fs.readFile(MASTER_PROMPT_PATH, 'utf-8');
+  } catch (error) {
+    console.error('[master-prompt] Failed to load master prompt:', error);
+    return null;
+  }
+}
+
 // App configurations
 const APP_CONFIG = {
   driver: { appName: 'driver', action: 'download-task' },
   navigator: { appName: 'navigator', action: 'navigate-task' },
+  old: { appName: 'old', action: 'download-task' },
 };
 
 // POST /api/invoke - Run a payload with SSE streaming
 app.post('/api/invoke', async (req, res) => {
-  const { app = 'driver', payloadName, variableOverrides, proxyType, proxyCountry, profileName, maxSteps, agentModel, model } = req.body;
+  const { app = 'driver', payloadName, variableOverrides, proxyType, proxyCountry, profileName, maxSteps, agentModel, model, carrier } = req.body;
 
   // Validate app selection
   if (!APP_CONFIG[app]) {
-    return res.status(400).json({ error: 'Invalid app. Must be "driver" or "navigator"' });
+    return res.status(400).json({ error: 'Invalid app. Must be "driver", "navigator", or "old"' });
   }
 
   if (!payloadName || !isValidPayloadName(payloadName)) {
     return res.status(400).json({ error: 'Invalid payload name' });
   }
 
-  const payloadPath = path.join(getPayloadsDir(app), payloadName);
+  // Markdown files cannot be invoked directly
+  if (payloadName.endsWith('.md')) {
+    return res.status(400).json({ error: 'Cannot invoke markdown files directly. Use JSON payloads.' });
+  }
+
+  const payloadPath = getPayloadPath(payloadName, app);
 
   // Check if payload exists
   try {
@@ -337,14 +600,59 @@ app.post('/api/invoke', async (req, res) => {
 
   try {
     const hasVariableOverrides = variableOverrides && Object.keys(variableOverrides).length > 0;
-    const hasBotDetectionOverrides = proxyType || proxyCountry || profileName;
     const hasMaxStepsOverride = maxSteps && !isNaN(maxSteps);
-    const hasModelOverrides = agentModel || model;
+    const hasCarrierOverride = carrier && carrier.trim();
 
-    if (hasVariableOverrides || hasBotDetectionOverrides || hasMaxStepsOverride || hasModelOverrides) {
+    // Load carrier config if specified
+    let carrierConfig = null;
+    if (hasCarrierOverride) {
+      carrierConfig = await loadCarrierConfig(carrier);
+      if (carrierConfig) {
+        console.log(`[invoke] Loaded carrier config: ${carrier}`);
+      }
+    }
+
+    // Always read and process payload to handle master prompt resolution
+    {
       // Read original payload
       const originalContent = await fs.readFile(payloadPath, 'utf-8');
       const payload = JSON.parse(originalContent);
+
+      // If payload has no instruction, load master prompt
+      if (!payload.instruction || payload.instruction.trim().length === 0) {
+        const masterPrompt = await loadMasterPrompt();
+        if (masterPrompt) {
+          console.log('[invoke] Using master prompt (no custom instruction in payload)');
+          payload.instruction = masterPrompt;
+        } else {
+          console.warn('[invoke] No instruction in payload and master prompt not found');
+        }
+      } else {
+        console.log('[invoke] Using custom instruction from payload');
+      }
+
+      // Merge carrier config (URL and credentials) - carrier is base, payload/overrides take precedence
+      if (carrierConfig) {
+        // Set URL from carrier if not already set in payload
+        if (carrierConfig.url && !payload.url) {
+          payload.url = carrierConfig.url;
+        }
+        // Merge carrier credentials into variables
+        if (carrierConfig.credentials) {
+          payload.variables = payload.variables || {};
+          for (const [key, value] of Object.entries(carrierConfig.credentials)) {
+            // Carrier credentials are base - don't override existing values
+            if (!(key in payload.variables) || payload.variables[key] === '***') {
+              payload.variables[key] = value;
+            }
+          }
+        }
+        // Also set carrier name in variables if not set
+        if (carrierConfig.name && !payload.variables?.carrier) {
+          payload.variables = payload.variables || {};
+          payload.variables.carrier = carrierConfig.name;
+        }
+      }
 
       // Merge variable overrides (including credentials if explicitly provided)
       if (hasVariableOverrides && payload.variables) {
@@ -497,8 +805,8 @@ app.post('/api/invoke', async (req, res) => {
     // Download file from Kernel if we have session info and a remote path
     let downloadedFiles = [];
     if (taskResult && taskResult.sessionId && taskResult.remotePath) {
-      // Create session directory first
-      const sessionDir = getSessionDir(taskResult.sessionId);
+      // Create session directory first (organized by app)
+      const sessionDir = getSessionDir(app, taskResult.sessionId);
       await fs.mkdir(sessionDir, { recursive: true });
 
       const filename = taskResult.result?.filename || path.basename(taskResult.remotePath);
@@ -526,6 +834,7 @@ app.post('/api/invoke', async (req, res) => {
     // Save session data (recording + logs + metadata)
     if (taskResult && taskResult.sessionId) {
       const sessionSaved = await saveSessionData(
+        app,
         taskResult.sessionId,
         payloadName,
         cleanOutput,
@@ -534,7 +843,7 @@ app.post('/api/invoke', async (req, res) => {
         downloadedFiles
       );
       if (sessionSaved) {
-        sendEvent('historySaved', { sessionId: taskResult.sessionId });
+        sendEvent('historySaved', { sessionId: taskResult.sessionId, app });
       }
     }
 
@@ -555,19 +864,26 @@ app.post('/api/invoke', async (req, res) => {
   });
 });
 
-// GET /api/sessions - List all sessions
+// GET /api/sessions - List all sessions for an app
 app.get('/api/sessions', async (req, res) => {
+  const appName = req.query.app || 'driver';
+  const appResultsDir = path.join(RESULTS_DIR, appName);
+
   try {
-    const entries = await fs.readdir(RESULTS_DIR, { withFileTypes: true });
+    // Ensure app results directory exists
+    await fs.mkdir(appResultsDir, { recursive: true });
+
+    const entries = await fs.readdir(appResultsDir, { withFileTypes: true });
     const sessions = await Promise.all(
       entries
         .filter(e => e.isDirectory())
         .map(async (e) => {
           try {
-            const metadataPath = path.join(RESULTS_DIR, e.name, 'metadata.json');
+            const metadataPath = path.join(appResultsDir, e.name, 'metadata.json');
             const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf-8'));
             return {
               id: e.name,
+              app: appName,
               ...metadata,
             };
           } catch {
@@ -584,7 +900,8 @@ app.get('/api/sessions', async (req, res) => {
 // GET /api/sessions/:id - Get session details
 app.get('/api/sessions/:id', async (req, res) => {
   const { id } = req.params;
-  const sessionDir = path.join(RESULTS_DIR, id);
+  const appName = req.query.app || 'driver';
+  const sessionDir = path.join(RESULTS_DIR, appName, id);
 
   try {
     const metadataPath = path.join(sessionDir, 'metadata.json');
@@ -603,7 +920,7 @@ app.get('/api/sessions/:id', async (req, res) => {
       }
     }
 
-    res.json({ id, ...metadata });
+    res.json({ id, app: appName, ...metadata });
   } catch {
     res.status(404).json({ error: 'Session not found' });
   }
@@ -612,7 +929,8 @@ app.get('/api/sessions/:id', async (req, res) => {
 // GET /api/sessions/:id/recording - Get session recording video
 app.get('/api/sessions/:id/recording', async (req, res) => {
   const { id } = req.params;
-  const videoPath = path.join(RESULTS_DIR, id, 'recording.mp4');
+  const appName = req.query.app || 'driver';
+  const videoPath = path.join(RESULTS_DIR, appName, id, 'recording.mp4');
 
   try {
     await fs.access(videoPath);
@@ -626,7 +944,8 @@ app.get('/api/sessions/:id/recording', async (req, res) => {
 // GET /api/sessions/:id/log - Get session log
 app.get('/api/sessions/:id/log', async (req, res) => {
   const { id } = req.params;
-  const logPath = path.join(RESULTS_DIR, id, 'log.txt');
+  const appName = req.query.app || 'driver';
+  const logPath = path.join(RESULTS_DIR, appName, id, 'log.txt');
 
   try {
     const log = await fs.readFile(logPath, 'utf-8');
@@ -641,8 +960,8 @@ app.get('/api/sessions/:id/log', async (req, res) => {
 // Use ?view=true to display inline instead of downloading
 app.get('/api/sessions/:id/files/:filename', async (req, res) => {
   const { id, filename } = req.params;
-  const { view } = req.query;
-  const filePath = path.join(RESULTS_DIR, id, filename);
+  const { view, app: appName = 'driver' } = req.query;
+  const filePath = path.join(RESULTS_DIR, appName, id, filename);
 
   try {
     await fs.access(filePath);
@@ -672,13 +991,38 @@ app.get('/api/sessions/:id/files/:filename', async (req, res) => {
   }
 });
 
-// Backward compatibility aliases
-app.get('/api/history', (req, res) => res.redirect('/api/sessions'));
-app.get('/api/history/:id', (req, res) => res.redirect(`/api/sessions/${req.params.id}`));
-app.get('/api/history/:id/recording', (req, res) => res.redirect(`/api/sessions/${req.params.id}/recording`));
-app.get('/api/history/:id/log', (req, res) => res.redirect(`/api/sessions/${req.params.id}/log`));
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`CUA 2.0 Playground listening on http://localhost:${PORT}`);
+// Backward compatibility aliases (preserve app query parameter)
+app.get('/api/history', (req, res) => {
+  const qs = req.query.app ? `?app=${req.query.app}` : '';
+  res.redirect(`/api/sessions${qs}`);
 });
+app.get('/api/history/:id', (req, res) => {
+  const qs = req.query.app ? `?app=${req.query.app}` : '';
+  res.redirect(`/api/sessions/${req.params.id}${qs}`);
+});
+app.get('/api/history/:id/recording', (req, res) => {
+  const qs = req.query.app ? `?app=${req.query.app}` : '';
+  res.redirect(`/api/sessions/${req.params.id}/recording${qs}`);
+});
+app.get('/api/history/:id/log', (req, res) => {
+  const qs = req.query.app ? `?app=${req.query.app}` : '';
+  res.redirect(`/api/sessions/${req.params.id}/log${qs}`);
+});
+
+// Start server with automatic port fallback
+function startServer(port, maxAttempts = 10) {
+  const server = app.listen(port, () => {
+    console.log(`CUA 2.0 Playground listening on http://localhost:${port}`);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && maxAttempts > 1) {
+      console.log(`Port ${port} in use, trying ${port + 1}...`);
+      startServer(port + 1, maxAttempts - 1);
+    } else {
+      throw err;
+    }
+  });
+}
+
+startServer(DEFAULT_PORT);

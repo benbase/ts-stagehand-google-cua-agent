@@ -6,7 +6,7 @@ export interface Credentials {
     username: string;
     password: string;
     totpSecret?: string;
-    email2faProvider?: string;
+    carrier?: string; // Carrier name - used for email 2FA lookup
 }
 
 export interface LoginResult {

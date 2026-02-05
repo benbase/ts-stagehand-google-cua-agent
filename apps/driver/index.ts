@@ -15,6 +15,7 @@ const app = kernel.app('driver');
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const DOWNLOAD_DIR = '/tmp/downloads';
 
 if (!OPENAI_API_KEY) {
@@ -23,6 +24,25 @@ if (!OPENAI_API_KEY) {
 
 if (!GOOGLE_API_KEY) {
     throw new Error('GOOGLE_API_KEY is not set');
+}
+
+// Get the appropriate API key for a model based on its provider prefix
+function getApiKeyForModel(model: string): string {
+    if (model.startsWith('openai/')) {
+        if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not set');
+        return OPENAI_API_KEY;
+    }
+    if (model.startsWith('anthropic/')) {
+        if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set');
+        return ANTHROPIC_API_KEY;
+    }
+    if (model.startsWith('google/')) {
+        if (!GOOGLE_API_KEY) throw new Error('GOOGLE_API_KEY is not set');
+        return GOOGLE_API_KEY;
+    }
+    // Default to OpenAI for backwards compatibility
+    if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not set');
+    return OPENAI_API_KEY;
 }
 
 // System prompt that enforces structured result reporting
@@ -54,9 +74,13 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         const url = payload?.url;
         const instruction = payload?.instruction;
         const maxSteps = payload?.maxSteps;
-        const model = payload?.model || "anthropic/claude-sonnet-4-5-20250929"; // Stagehand model for DOM operations
-        const agentModel = payload?.agentModel || "google/gemini-2.5-computer-use-preview-10-2025"; // CUA model for visual navigation
-        const baseSystemPrompt = payload?.systemPrompt || "You are a helpful assistant that can use a web browser. Do not ask follow up questions, the user will trust your judgement.";
+        const model = payload?.model || "openai/gpt-4.1";
+        const agentModel = payload?.agentModel || "google/gemini-2.5-computer-use-preview-10-2025";
+        const baseSystemPrompt = payload?.systemPrompt || `You are an expert at finding resources on websites for insurance brokerage internal workflows.
+
+If a website asks for login, use your login tool.
+
+Always report your result with the report result tool.`;
         const variables = payload?.variables || {};
         const proxyType = payload?.proxyType;
         const proxyCountry = payload?.proxyCountry;
@@ -70,6 +94,10 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         console.log('[init] Preparing task...');
         const sensitiveKeys = ['username', 'password', 'totpSecret'];
         let resolvedInstruction = instruction;
+
+        // Always substitute %url% with the URL
+        resolvedInstruction = resolvedInstruction.replace(/%url%/g, url);
+
         for (const [key, value] of Object.entries(variables)) {
             if (!sensitiveKeys.includes(key)) {
                 console.log(`[init] Substituting %${key}% with value: ${value}`);
@@ -122,11 +150,12 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         }
 
         // Create browser with stealth mode, proxy, and profile for maximum bot detection avoidance
+        // Using 1280x800 (closest Kernel-supported viewport to Stagehand's recommended 1288x711)
         console.log('[browser] Creating browser instance...');
         const kernelBrowser = await kernel.browsers.create({
             invocation_id: ctx.invocation_id,
             stealth: true,
-            viewport: { width: 1440, height: 900 },
+            viewport: { width: 1280, height: 800 },
             ...(proxyId && { proxy_id: proxyId }),
             ...(profileId && { profile: { id: profileId, save_changes: true } }),
         });
@@ -143,8 +172,8 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         }
 
         // Initialize Stagehand
-        // experimental: true + useAPI: false required for custom tools
         console.log('[stagehand] Initializing Stagehand...');
+        const modelApiKey = getApiKeyForModel(model);
         const stagehand = new Stagehand({
             env: "LOCAL",
             localBrowserLaunchOptions: {
@@ -152,9 +181,9 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
                 downloadsPath: DOWNLOAD_DIR,
                 acceptDownloads: true
             },
-            model: model as any,
-            apiKey: GOOGLE_API_KEY,
-            verbose: 1, // Enable verbose logging for more visibility
+            model,
+            apiKey: modelApiKey,
+            verbose: 1,
             domSettleTimeout: 30_000,
             experimental: true,
             disableAPI: true,
@@ -188,11 +217,12 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         // Create agent with tools and result-reporting prompt
         const systemPrompt = `${baseSystemPrompt}\n\n${RESULT_REPORTING_PROMPT}\n\nYou are currently on the following page: ${page.url()}.`;
 
-        console.log('[agent] Initializing CUA agent...');
+        console.log('[agent] Initializing agent...');
+        const agentApiKey = getApiKeyForModel(agentModel);
         const agent = stagehand.agent({
             model: {
                 modelName: agentModel,
-                apiKey: GOOGLE_API_KEY,
+                apiKey: agentApiKey,
             },
             mode: 'cua',
             systemPrompt,
@@ -201,30 +231,17 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
 
         // Execute task
         console.log('[agent] Executing task...');
-        const agentResult = await agent.execute({ instruction: resolvedInstruction, maxSteps });
+        await agent.execute({ instruction: resolvedInstruction, maxSteps });
         console.log('[agent] Task execution completed');
-
-        // Log agent execution summary
-        if (agentResult) {
-            console.log('[agent] Success:', agentResult.success);
-            console.log('[agent] Message:', agentResult.message);
-            if (agentResult.actions && agentResult.actions.length > 0) {
-                console.log(`[agent] Total actions: ${agentResult.actions.length}`);
-                for (const action of agentResult.actions) {
-                    const reasoning = action.reasoning ? ` - ${action.reasoning.substring(0, 100)}${action.reasoning.length > 100 ? '...' : ''}` : '';
-                    console.log(`[agent] Step: ${action.type}${reasoning}`);
-                }
-            }
-        }
 
         // Get the structured result from the agent
         let result: TaskResultStatus = getResult() ?? { status: 'error', message: 'Agent did not report a result' };
         console.log('[result] Agent reported status:', result.status);
 
         // If agent reported success, verify the download actually happened
+        let newFilename: string | null = null;
         if (result.status === 'success') {
             console.log('[download] Verifying file download...');
-            let newFilename: string | null = null;
             const maxAttempts = 20;
 
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -247,42 +264,14 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
             }
 
             if (newFilename) {
-                const remotePath = `${DOWNLOAD_DIR}/${newFilename}`;
-                console.log('[download] Remote path:', remotePath);
+                console.log('[download] Remote path:', `${DOWNLOAD_DIR}/${newFilename}`);
                 console.log('[download] File successfully downloaded to remote filesystem');
 
                 // Update result with actual file info
                 result = {
                     status: 'success',
-                    fileUrl: remotePath,
+                    fileUrl: `${DOWNLOAD_DIR}/${newFilename}`,
                     filename: newFilename,
-                };
-
-                // Stop recording before returning
-                if (replayId) {
-                    try {
-                        await kernel.browsers.replays.stop(replayId, { id: kernelBrowser.session_id });
-                        console.log("[cleanup] Recording stopped");
-                    } catch (error) {
-                        console.log("[cleanup] Failed to stop recording:", error);
-                    }
-                }
-
-                // Clean up proxy
-                if (proxyId) {
-                    try {
-                        await kernel.proxies.delete(proxyId);
-                        console.log("[cleanup] Proxy deleted:", proxyId);
-                    } catch (error) {
-                        console.log("[cleanup] Failed to delete proxy:", error);
-                    }
-                }
-
-                console.log('[result] Task completed successfully');
-                return {
-                    result,
-                    remotePath,
-                    sessionId: kernelBrowser.session_id
                 };
             } else {
                 // Agent said success but no file found
@@ -315,7 +304,7 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
         }
 
         // Delete profile on failure to avoid reusing bad cookies/state
-        if (profileName) {
+        if (result.status !== 'success' && profileName) {
             try {
                 await kernel.profiles.delete(profileName);
                 console.log("[cleanup] Profile deleted due to failure:", profileName);
@@ -324,11 +313,13 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
             }
         }
 
-        // Return with failure result (no remotePath)
-        console.log('[result] Task failed with status:', result.status);
-        console.log('[result] Details:', JSON.stringify(result));
+        // Return result
+        const isSuccess = result.status === 'success';
+        console.log(`[result] Task ${isSuccess ? 'completed successfully' : 'failed with status: ' + result.status}`);
+        if (!isSuccess) console.log('[result] Details:', JSON.stringify(result));
         return {
             result,
+            ...(isSuccess && newFilename ? { remotePath: `${DOWNLOAD_DIR}/${newFilename}` } : {}),
             sessionId: kernelBrowser.session_id
         };
     },
@@ -337,5 +328,4 @@ app.action<DownloadTaskInput, DownloadTaskOutput>(
 // Local execution support
 if (import.meta.url === `file://${process.argv[1]}`) {
     console.log('Running Driver locally...');
-    // Add local test execution here if needed
 }

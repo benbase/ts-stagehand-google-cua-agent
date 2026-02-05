@@ -1,5 +1,5 @@
 /**
- * CUA 2.0 Playground
+ * CUA 2.0 Playground - Apple-inspired UI
  */
 
 class App {
@@ -10,8 +10,12 @@ class App {
     this.isNewPayload = false;
     this.abortController = null;
     this.theaterMode = false;
-    this.sidebarWasVisible = true; // Track sidebar state before theater mode
+    this.sidebarWasVisible = true;
     this.theaterHintTimeout = null;
+    this.masterPrompt = null;
+    this.usesMasterPrompt = true;
+    this.clearCredentialsFlag = false;
+    this.instructionsExpanded = false;
 
     this.el = {
       mainContent: document.getElementById('main-content'),
@@ -19,46 +23,79 @@ class App {
       themeToggle: document.getElementById('theme-toggle'),
       themeIcon: document.getElementById('theme-icon'),
       payloadList: document.getElementById('payload-list'),
-      // App selector
-      appSelect: document.getElementById('app-select'),
+      appSwitcher: document.getElementById('app-switcher'),
+
+      // Task config form
+      taskConfigEmpty: document.getElementById('task-config-empty'),
+      taskConfigForm: document.getElementById('task-config-form'),
+
+      // Config fields
       payloadUrl: document.getElementById('payload-url'),
       payloadInstruction: document.getElementById('payload-instruction'),
+      varCarrier: document.getElementById('var-carrier'),
+      varClientName: document.getElementById('var-client-name'),
       varGroupNumber: document.getElementById('var-group-number'),
       varInvoiceMonth: document.getElementById('var-invoice-month'),
       varInvoiceYear: document.getElementById('var-invoice-year'),
       maxSteps: document.getElementById('max-steps'),
+
       // Models
       agentModel: document.getElementById('agent-model'),
       stagehandModel: document.getElementById('stagehand-model'),
+
       // Credentials
       credentialsSection: document.getElementById('credentials-section'),
-      credentialsToggle: document.getElementById('credentials-toggle'),
-      credentialsFields: document.getElementById('credentials-fields'),
-      credentialsStatus: document.getElementById('credentials-status'),
+      credentialsDescription: document.getElementById('credentials-description'),
       varUsername: document.getElementById('var-username'),
       varPassword: document.getElementById('var-password'),
       varTotpSecret: document.getElementById('var-totp-secret'),
+      clearCredentialsBtn: document.getElementById('clear-credentials-btn'),
+
       // Proxy settings
       proxyType: document.getElementById('proxy-type'),
       proxyCountry: document.getElementById('proxy-country'),
       proxyCountryGroup: document.getElementById('proxy-country-group'),
       profileName: document.getElementById('profile-name'),
+
+      // Instructions
+      instructionsPreview: document.getElementById('instructions-preview'),
+      instructionsPreviewContent: document.getElementById('instructions-preview-content'),
+      instructionsCustomizeBtn: document.getElementById('instructions-customize-btn'),
+      instructionsEditor: document.getElementById('instructions-editor'),
+      instructionsStatus: document.getElementById('instructions-status'),
+      instructionsStatusText: document.getElementById('instructions-status-text'),
+      instructionsResetBtn: document.getElementById('instructions-reset-btn'),
+      instructionsCollapseBtn: document.getElementById('instructions-collapse-btn'),
+
+      // Advanced settings (inline)
+      advancedSettings: document.getElementById('advanced-settings'),
+      advancedSettingsToggle: document.getElementById('advanced-settings-toggle'),
+      advancedSettingsContent: document.getElementById('advanced-settings-content'),
+
+      // Buttons
       newPayloadBtn: document.getElementById('new-payload-btn'),
       refreshBtn: document.getElementById('refresh-btn'),
-      runBtn: document.getElementById('run-btn'),
-      runBtnText: document.getElementById('run-btn-text'),
       saveBtn: document.getElementById('save-btn'),
       updateBtn: document.getElementById('update-btn'),
-      stopBtn: document.getElementById('stop-btn'),
       status: document.getElementById('status'),
       statusText: document.getElementById('status-text'),
+
+      // Action bar
+      actionBar: document.getElementById('action-bar'),
+      actionBarTask: document.getElementById('action-bar-task'),
+      actionBarStatus: document.getElementById('action-bar-status'),
+      runBtn: document.getElementById('run-btn'),
+      runBtnText: document.getElementById('run-btn-text'),
+      stopBtn: document.getElementById('stop-btn'),
+
       // Tabs
       tabEditor: document.getElementById('tab-editor'),
       tabLiveView: document.getElementById('tab-live-view'),
       tabLiveStatus: document.getElementById('tab-live-status'),
       tabContentEditor: document.getElementById('tab-content-editor'),
       tabContentLiveView: document.getElementById('tab-content-live-view'),
-      // Live view elements
+
+      // Live view
       liveViewIdle: document.getElementById('live-view-idle'),
       runningState: document.getElementById('running-state'),
       liveViewPlaceholder: document.getElementById('live-view-placeholder'),
@@ -70,6 +107,8 @@ class App {
       outputLog: document.getElementById('output-log'),
       copyOutputBtn: document.getElementById('copy-output-btn'),
       clearOutputBtn: document.getElementById('clear-output-btn'),
+      scrollBottomBtn: document.getElementById('scroll-bottom-btn'),
+
       // Theater mode
       liveViewCard: document.getElementById('live-view-card'),
       liveViewOverlay: document.getElementById('live-view-overlay'),
@@ -77,17 +116,21 @@ class App {
       theaterExpandIcon: document.getElementById('theater-expand-icon'),
       theaterCollapseIcon: document.getElementById('theater-collapse-icon'),
       panelRight: document.getElementById('panel-right'),
+
+      // Save modal
       saveModal: document.getElementById('save-modal'),
       saveNameInput: document.getElementById('save-name-input'),
       saveCancelBtn: document.getElementById('save-cancel-btn'),
       saveConfirmBtn: document.getElementById('save-confirm-btn'),
+
       // Results panel
       resultsToggle: document.getElementById('results-toggle'),
       resultsPanel: document.getElementById('results-panel'),
       resultsPanelOverlay: document.getElementById('results-panel-overlay'),
       resultsPanelClose: document.getElementById('results-panel-close'),
       resultsPanelContent: document.getElementById('results-panel-content'),
-      // History tab
+
+      // History
       tabHistory: document.getElementById('tab-history'),
       tabContentHistory: document.getElementById('tab-content-history'),
       historyList: document.getElementById('history-list'),
@@ -110,9 +153,129 @@ class App {
 
   async init() {
     this.loadTheme();
+    await this.loadMasterPrompt();
+    await this.loadCarriers();
     await this.loadPayloads();
     this.bindEvents();
     this.updateAppVisibility();
+  }
+
+  // Master Prompt
+  async loadMasterPrompt() {
+    try {
+      const res = await fetch('/api/master-prompt');
+      const data = await res.json();
+      this.masterPrompt = data.content;
+    } catch (e) {
+      console.error('Failed to load master prompt:', e);
+      this.masterPrompt = null;
+    }
+  }
+
+  instructionMatchesMaster() {
+    if (!this.masterPrompt) return false;
+    const current = this.el.payloadInstruction.value.trim();
+    const master = this.masterPrompt.trim();
+    return current === master;
+  }
+
+  updateInstructionsStatus() {
+    const matchesMaster = this.instructionMatchesMaster();
+
+    if (matchesMaster) {
+      this.el.instructionsStatus.classList.remove('custom');
+      this.el.instructionsStatusText.textContent = 'Default';
+      this.el.instructionsResetBtn.style.display = 'none';
+    } else {
+      this.el.instructionsStatus.classList.add('custom');
+      this.el.instructionsStatusText.textContent = 'Custom';
+      this.el.instructionsResetBtn.style.display = 'block';
+    }
+
+    // Update preview content
+    const instruction = this.el.payloadInstruction.value || this.masterPrompt || '';
+    const preview = instruction.substring(0, 200) + (instruction.length > 200 ? '...' : '');
+    this.el.instructionsPreviewContent.textContent = matchesMaster
+      ? 'Using default AOP...'
+      : preview || 'No AOP configured';
+  }
+
+  resetToMasterPrompt() {
+    if (this.masterPrompt) {
+      this.el.payloadInstruction.value = this.masterPrompt;
+      this.updateInstructionsStatus();
+    }
+  }
+
+  expandInstructions() {
+    this.instructionsExpanded = true;
+    this.el.instructionsPreview.style.display = 'none';
+    this.el.instructionsEditor.style.display = 'block';
+    this.el.payloadInstruction.focus();
+  }
+
+  collapseInstructions() {
+    this.instructionsExpanded = false;
+    this.el.instructionsPreview.style.display = 'block';
+    this.el.instructionsEditor.style.display = 'none';
+    this.updateInstructionsStatus();
+  }
+
+  // Carriers
+  async loadCarriers() {
+    try {
+      const res = await fetch('/api/carriers');
+      const carriers = await res.json();
+
+      const insuranceCarriers = carriers.filter(c => c.email2faSource === 'carrier');
+      const hrPlatforms = carriers.filter(c => c.email2faSource === 'benadmin');
+
+      let optionsHtml = '<option value="">Select carrier...</option>';
+
+      if (insuranceCarriers.length > 0) {
+        optionsHtml += '<optgroup label="Insurance Carriers">';
+        for (const carrier of insuranceCarriers) {
+          optionsHtml += `<option value="${carrier.id}" data-url="${carrier.url}" data-source="${carrier.email2faSource}">${carrier.name}</option>`;
+        }
+        optionsHtml += '</optgroup>';
+      }
+
+      if (hrPlatforms.length > 0) {
+        optionsHtml += '<optgroup label="HR Platforms">';
+        for (const carrier of hrPlatforms) {
+          optionsHtml += `<option value="${carrier.id}" data-url="${carrier.url}" data-source="${carrier.email2faSource}">${carrier.name}</option>`;
+        }
+        optionsHtml += '</optgroup>';
+      }
+
+      this.el.varCarrier.innerHTML = optionsHtml;
+      this.carriers = carriers;
+    } catch (e) {
+      console.error('Failed to load carriers:', e);
+    }
+  }
+
+  async onCarrierChange() {
+    const carrierName = this.el.varCarrier.value;
+    if (!carrierName) {
+      this.currentCarrierConfig = null;
+      return;
+    }
+
+    const selectedOption = this.el.varCarrier.selectedOptions[0];
+    const source = selectedOption?.dataset?.source || '';
+
+    try {
+      const res = await fetch(`/api/carriers/${encodeURIComponent(carrierName)}?source=${source}`);
+      const config = await res.json();
+      this.currentCarrierConfig = config;
+
+      if (config.url) {
+        this.el.payloadUrl.value = config.url;
+      }
+    } catch (e) {
+      console.error('Failed to load carrier config:', e);
+    }
   }
 
   // Theme
@@ -131,8 +294,8 @@ class App {
   }
 
   updateThemeIcon(theme) {
-    const moonIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
-    const sunIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
+    const moonIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+    const sunIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
     this.el.themeIcon.innerHTML = theme === 'dark' ? sunIcon : moonIcon;
   }
 
@@ -141,31 +304,47 @@ class App {
     this.el.mainContent.classList.toggle('sidebar-collapsed');
   }
 
+  // App Switcher
+  getSelectedApp() {
+    const activeBtn = this.el.appSwitcher.querySelector('.app-switcher-btn.active');
+    return activeBtn?.dataset.app || 'navigator';
+  }
+
+  setSelectedApp(app) {
+    this.el.appSwitcher.querySelectorAll('.app-switcher-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.app === app);
+    });
+  }
+
+  // Advanced Settings (inline toggle)
+  toggleAdvancedSettings() {
+    this.el.advancedSettings.classList.toggle('expanded');
+  }
+
+  collapseAdvancedSettings() {
+    this.el.advancedSettings.classList.remove('expanded');
+  }
+
   // Tabs
   switchTab(tabName) {
-    // Exit theater mode when switching away from live view
     if (tabName !== 'live-view') {
       this.exitTheaterMode();
     }
 
-    // Update tab buttons
-    this.el.tabEditor.classList.toggle('active', tabName === 'editor');
+    this.el.tabEditor.classList.toggle('active', tabName === 'task');
     this.el.tabLiveView.classList.toggle('active', tabName === 'live-view');
     this.el.tabHistory.classList.toggle('active', tabName === 'history');
 
-    // Update tab content
-    this.el.tabContentEditor.classList.toggle('active', tabName === 'editor');
+    this.el.tabContentEditor.classList.toggle('active', tabName === 'task');
     this.el.tabContentLiveView.classList.toggle('active', tabName === 'live-view');
     this.el.tabContentHistory.classList.toggle('active', tabName === 'history');
 
-    // Load history when switching to history tab
     if (tabName === 'history') {
       this.loadHistory();
     }
   }
 
   setTabStatus(status) {
-    // status: 'running', 'complete', 'error', or ''
     this.el.tabLiveStatus.className = 'tab-status' + (status ? ` ${status}` : '');
   }
 
@@ -175,23 +354,15 @@ class App {
     this.el.runningState.classList.toggle('theater-mode', this.theaterMode);
     this.el.panelRight.classList.toggle('theater-mode-active', this.theaterMode);
 
-    // Toggle icons
     this.el.theaterExpandIcon.style.display = this.theaterMode ? 'none' : 'block';
     this.el.theaterCollapseIcon.style.display = this.theaterMode ? 'block' : 'none';
-
-    // Update button title
     this.el.theaterModeBtn.title = this.theaterMode ? 'Exit theater mode (Esc)' : 'Theater mode (T)';
 
-    // Auto-hide/show sidebar
     if (this.theaterMode) {
-      // Remember current sidebar state and hide it
       this.sidebarWasVisible = !this.el.mainContent.classList.contains('sidebar-collapsed');
       this.el.mainContent.classList.add('sidebar-collapsed');
-
-      // Show exit hint briefly
       this.showTheaterHint();
     } else {
-      // Restore sidebar if it was visible before
       if (this.sidebarWasVisible) {
         this.el.mainContent.classList.remove('sidebar-collapsed');
       }
@@ -203,9 +374,7 @@ class App {
     if (hint) {
       hint.classList.add('visible');
       clearTimeout(this.theaterHintTimeout);
-      this.theaterHintTimeout = setTimeout(() => {
-        hint.classList.remove('visible');
-      }, 2500);
+      this.theaterHintTimeout = setTimeout(() => hint.classList.remove('visible'), 2500);
     }
   }
 
@@ -218,87 +387,137 @@ class App {
       this.el.theaterCollapseIcon.style.display = 'none';
       this.el.theaterModeBtn.title = 'Theater mode (T)';
 
-      // Hide the exit hint
       const hint = document.querySelector('.theater-exit-hint');
       if (hint) {
         hint.classList.remove('visible');
         clearTimeout(this.theaterHintTimeout);
       }
 
-      // Restore sidebar if it was visible before
       if (this.sidebarWasVisible) {
         this.el.mainContent.classList.remove('sidebar-collapsed');
       }
     }
   }
 
-  // Payloads
+  // Payloads (Tasks)
   async loadPayloads() {
     try {
-      const app = this.el.appSelect.value;
+      const app = this.getSelectedApp();
       const res = await fetch(`/api/payloads?app=${app}`);
       const payloads = await res.json();
 
       if (!payloads.length) {
-        this.el.payloadList.innerHTML = '<li class="empty-state">No payloads</li>';
+        this.el.payloadList.innerHTML = '<div class="task-empty-state">No tasks found</div>';
         return;
       }
 
-      this.el.payloadList.innerHTML = payloads
-        .map(p => `<li data-name="${p}">${p.replace('.json', '').replace(/_/g, ' ')}</li>`)
-        .join('');
+      // Filter out markdown files - only show JSON tasks
+      const tasks = payloads.filter(p => {
+        const name = typeof p === 'string' ? p : p.name;
+        return name.endsWith('.json');
+      });
+
+      if (!tasks.length) {
+        this.el.payloadList.innerHTML = '<div class="task-empty-state">No tasks found</div>';
+        return;
+      }
+
+      this.el.payloadList.innerHTML = tasks.map(p => {
+        const name = typeof p === 'string' ? p : p.name;
+        const displayName = name
+            .replace(/^shared\//, '')
+            .replace(/\.json$/, '')
+            .replace(/_/g, ' ');
+
+        return `
+          <div class="task-item" data-name="${name}">
+            <span class="task-item-icon"></span>
+            <span class="task-item-name">${displayName}</span>
+          </div>
+        `;
+      }).join('');
     } catch (e) {
-      this.el.payloadList.innerHTML = '<li class="empty-state">Error loading</li>';
+      this.el.payloadList.innerHTML = '<div class="task-empty-state">Error loading tasks</div>';
     }
   }
 
   async selectPayload(name) {
     try {
-      const app = this.el.appSelect.value;
-      const res = await fetch(`/api/payloads/${name}?app=${app}`);
+      const app = this.getSelectedApp();
+      const res = await fetch(`/api/payloads/${encodeURIComponent(name)}?app=${app}`);
       const payload = await res.json();
 
       this.selectedPayload = name;
       this.originalPayload = payload;
       this.isNewPayload = false;
 
+      // Show config form, hide empty state
+      this.el.taskConfigEmpty.style.display = 'none';
+      this.el.taskConfigForm.style.display = 'block';
+
+      // Handle markdown files (shouldn't happen since we filter them out)
+      if (payload.type === 'markdown') {
+        this.el.runBtn.disabled = true;
+        return;
+      }
+
+      // Load form values
       this.el.payloadUrl.value = payload.url || '';
-      this.el.payloadInstruction.value = payload.instruction || '';
+      this.el.payloadInstruction.value = payload.instruction || this.masterPrompt || '';
 
       const vars = payload.variables || {};
+
+      // Set carrier
+      if (vars.carrier) {
+        const carrierSelect = this.el.varCarrier;
+        for (const option of carrierSelect.options) {
+          if (option.value === vars.carrier || option.text === vars.carrier) {
+            carrierSelect.value = option.value;
+            break;
+          }
+        }
+        await this.onCarrierChange();
+        if (payload.url) {
+          this.el.payloadUrl.value = payload.url;
+        }
+      } else {
+        this.el.varCarrier.value = '';
+        this.currentCarrierConfig = null;
+      }
+
+      this.el.varClientName.value = vars.clientName || '';
       this.el.varGroupNumber.value = vars.groupNumber || '';
       this.el.varInvoiceMonth.value = vars.invoiceMonth || '';
       this.el.varInvoiceYear.value = vars.invoiceYear || '';
-
-      // Load maxSteps
       this.el.maxSteps.value = payload.maxSteps || '';
-
-      // Load model settings
       this.el.agentModel.value = payload.agentModel || '';
       this.el.stagehandModel.value = payload.model || '';
-
-      // Load proxy and profile settings
       this.el.proxyType.value = payload.proxyType || '';
       this.el.proxyCountry.value = payload.proxyCountry || '';
       this.el.profileName.value = payload.profileName || '';
       this.updateProxyCountryVisibility();
 
-      // Show credentials section if payload has stored credentials
-      const hasStoredCredentials = vars.username === '***' || vars.password === '***';
-      this.el.credentialsSection.style.display = hasStoredCredentials ? 'block' : 'none';
-
-      // Clear credential override fields and collapse
+      // Reset credentials
       this.el.varUsername.value = '';
       this.el.varPassword.value = '';
       this.el.varTotpSecret.value = '';
-      this.el.credentialsSection.classList.remove('expanded');
-      this.el.credentialsFields.style.display = 'none';
-      this.updateCredentialsStatus();
+      this.clearCredentialsFlag = false;
 
-      document.querySelectorAll('#payload-list li').forEach(li => {
-        li.classList.toggle('active', li.dataset.name === name);
+      // Update task list selection
+      document.querySelectorAll('#payload-list .task-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.name === name);
       });
 
+      // Update action bar
+      this.el.actionBarTask.textContent = name.replace(/\.json$/, '').replace(/_/g, ' ');
+      this.el.actionBarStatus.textContent = '';
+
+      // Update instructions UI
+      this.collapseInstructions();
+      this.updateInstructionsStatus();
+      this.collapseAdvancedSettings();
+
+      // Enable buttons
       this.el.runBtn.disabled = false;
       this.el.saveBtn.disabled = false;
       this.el.updateBtn.disabled = false;
@@ -312,125 +531,98 @@ class App {
     this.originalPayload = null;
     this.isNewPayload = true;
 
+    // Show config form
+    this.el.taskConfigEmpty.style.display = 'none';
+    this.el.taskConfigForm.style.display = 'block';
+
+    // Reset all fields
     this.el.payloadUrl.value = '';
-    this.el.payloadInstruction.value = '';
+    this.el.payloadInstruction.value = this.masterPrompt || '';
+    this.el.varCarrier.value = '';
+    this.el.varClientName.value = '';
     this.el.varGroupNumber.value = '';
     this.el.varInvoiceMonth.value = '';
     this.el.varInvoiceYear.value = '';
-
-    // Reset maxSteps
     this.el.maxSteps.value = '';
-
-    // Reset model settings
     this.el.agentModel.value = '';
     this.el.stagehandModel.value = '';
-
-    // Reset proxy and profile settings
     this.el.proxyType.value = '';
     this.el.proxyCountry.value = '';
     this.el.profileName.value = '';
     this.updateProxyCountryVisibility();
 
-    // Show credentials section for new payloads (to allow adding credentials)
-    this.el.credentialsSection.style.display = 'block';
     this.el.varUsername.value = '';
     this.el.varPassword.value = '';
     this.el.varTotpSecret.value = '';
-    this.el.credentialsSection.classList.remove('expanded');
-    this.el.credentialsFields.style.display = 'none';
-    this.updateCredentialsStatus();
+    this.clearCredentialsFlag = false;
 
-    document.querySelectorAll('#payload-list li').forEach(li => li.classList.remove('active'));
+    // Clear selection
+    document.querySelectorAll('#payload-list .task-item').forEach(item => item.classList.remove('active'));
 
+    // Update action bar
+    this.el.actionBarTask.textContent = 'New task';
+    this.el.actionBarStatus.textContent = 'Unsaved';
+
+    // Update instructions and settings
+    this.collapseInstructions();
+    this.updateInstructionsStatus();
+    this.collapseAdvancedSettings();
+
+    // Update buttons
     this.el.runBtn.disabled = true;
     this.el.saveBtn.disabled = false;
-    this.el.updateBtn.disabled = true;  // Can't update a new payload
-    this.el.payloadUrl.focus();
-  }
-
-  insertVariable(variable) {
-    const ta = this.el.payloadInstruction;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    ta.value = ta.value.substring(0, start) + variable + ta.value.substring(end);
-    ta.selectionStart = ta.selectionEnd = start + variable.length;
-    ta.focus();
-  }
-
-  // Credentials
-  toggleCredentials() {
-    const isExpanded = this.el.credentialsSection.classList.toggle('expanded');
-    this.el.credentialsFields.style.display = isExpanded ? 'flex' : 'none';
-  }
-
-  updateCredentialsStatus() {
-    const hasCustom = this.el.varUsername.value || this.el.varPassword.value || this.el.varTotpSecret.value;
-    const hasStored = this.originalPayload?.variables?.username === '***' ||
-                      this.originalPayload?.variables?.password === '***';
-
-    if (hasCustom) {
-      this.el.credentialsStatus.textContent = hasStored ? 'Custom override' : 'Set';
-    } else {
-      this.el.credentialsStatus.textContent = hasStored ? 'Using stored' : 'Optional';
-    }
-    this.el.credentialsStatus.classList.toggle('custom', hasCustom);
+    this.el.updateBtn.disabled = true;
+    this.el.varCarrier.focus();
   }
 
   // Proxy
   updateProxyCountryVisibility() {
     const hasProxy = this.el.proxyType.value !== '';
     this.el.proxyCountryGroup.style.display = hasProxy ? 'block' : 'none';
-    // Reset country when proxy is disabled
     if (!hasProxy) {
       this.el.proxyCountry.value = '';
     }
   }
 
-  // App selection
+  // App visibility
   updateAppVisibility() {
-    const isDriver = this.el.appSelect.value === 'driver';
+    const app = this.getSelectedApp();
+    const isStagehandApp = app === 'driver' || app === 'old';
 
-    // Show/hide driver-only elements (includes CUA model optgroup with Claude models)
     document.querySelectorAll('.driver-only').forEach(el => {
-      el.style.display = isDriver ? '' : 'none';
+      el.style.display = isStagehandApp ? '' : 'none';
     });
 
-    // Reset CUA model selection when switching to Navigator (Claude models not available)
-    if (!isDriver && this.el.agentModel.value && this.el.agentModel.value.startsWith('anthropic/')) {
+    if (!isStagehandApp && this.el.agentModel.value?.startsWith('anthropic/')) {
       this.el.agentModel.value = '';
     }
   }
 
   async onAppChange() {
     this.updateAppVisibility();
-    // Clear current selection and reload payloads for the new app
     this.selectedPayload = null;
     this.originalPayload = null;
     this.isNewPayload = false;
-    // Clear form fields
-    this.el.payloadUrl.value = '';
-    this.el.payloadInstruction.value = '';
-    this.el.varGroupNumber.value = '';
-    this.el.varInvoiceMonth.value = '';
-    this.el.varInvoiceYear.value = '';
-    this.el.maxSteps.value = '';
-    this.el.agentModel.value = '';
-    this.el.stagehandModel.value = '';
-    this.el.proxyType.value = '';
-    this.el.proxyCountry.value = '';
-    this.el.profileName.value = '';
-    this.updateProxyCountryVisibility();
-    // Reset credentials
+
+    // Show empty state
+    this.el.taskConfigEmpty.style.display = 'flex';
+    this.el.taskConfigForm.style.display = 'none';
+
+    // Reset buttons and action bar
+    this.el.runBtn.disabled = true;
+    this.el.updateBtn.disabled = true;
+    this.el.actionBarTask.textContent = 'No task selected';
+    this.el.actionBarStatus.textContent = '';
+
+    await this.loadPayloads();
+  }
+
+  // Credentials
+  clearStoredCredentials() {
+    this.clearCredentialsFlag = true;
     this.el.varUsername.value = '';
     this.el.varPassword.value = '';
     this.el.varTotpSecret.value = '';
-    this.el.credentialsSection.classList.remove('expanded');
-    this.el.credentialsFields.style.display = 'none';
-    // Disable buttons until a payload is selected
-    this.el.runBtn.disabled = true;
-    this.el.updateBtn.disabled = true;
-    // Reload payload list for the selected app
-    await this.loadPayloads();
   }
 
   // Run
@@ -447,11 +639,12 @@ class App {
 
     this.setStatus('running', 'Running...');
     this.el.runBtn.disabled = true;
-    this.el.runBtnText.innerHTML = '<span class="spinner"></span>';
-    this.el.stopBtn.style.display = 'inline-flex';
+    this.el.runBtn.classList.add('running');
+    this.el.runBtnText.textContent = 'Running...';
+    this.el.stopBtn.style.display = 'flex';
+    this.el.actionBarStatus.textContent = 'Running...';
     this.el.outputLog.textContent = '';
 
-    // Switch to live view tab and set status
     this.switchTab('live-view');
     this.setTabStatus('running');
     this.el.liveViewIdle.style.display = 'none';
@@ -470,24 +663,23 @@ class App {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          app: this.el.appSelect.value,
+          app: this.getSelectedApp(),
           payloadName: this.selectedPayload,
+          ...(this.el.varCarrier.value && { carrier: this.el.varCarrier.value }),
           variableOverrides: {
+            carrier: this.el.varCarrier.selectedOptions[0]?.text || '',
+            clientName: this.el.varClientName.value,
             groupNumber: this.el.varGroupNumber.value,
             invoiceMonth: this.el.varInvoiceMonth.value,
             invoiceYear: this.el.varInvoiceYear.value,
-            // Credential overrides (only sent if user entered a value)
             ...(this.el.varUsername.value && { username: this.el.varUsername.value }),
             ...(this.el.varPassword.value && { password: this.el.varPassword.value }),
             ...(this.el.varTotpSecret.value && { totpSecret: this.el.varTotpSecret.value }),
           },
-          // Proxy and profile settings
           ...(this.el.proxyType.value && { proxyType: this.el.proxyType.value }),
           ...(this.el.proxyCountry.value && { proxyCountry: this.el.proxyCountry.value }),
           ...(this.el.profileName.value && { profileName: this.el.profileName.value }),
-          // Max steps override
           ...(this.el.maxSteps.value && { maxSteps: parseInt(this.el.maxSteps.value, 10) }),
-          // Model overrides
           ...(this.el.agentModel.value && { agentModel: this.el.agentModel.value }),
           ...(this.el.stagehandModel.value && { model: this.el.stagehandModel.value }),
         }),
@@ -531,8 +723,10 @@ class App {
     } finally {
       this.isRunning = false;
       this.el.runBtn.disabled = false;
+      this.el.runBtn.classList.remove('running');
       this.el.runBtnText.textContent = 'Run';
       this.el.stopBtn.style.display = 'none';
+      this.el.actionBarStatus.textContent = '';
     }
   }
 
@@ -557,16 +751,13 @@ class App {
         break;
 
       case 'complete':
-        // Exit theater mode when session ends
         this.exitTheaterMode();
-
         this.el.liveViewIframe.classList.remove('active');
         this.el.liveViewIframe.src = 'about:blank';
         this.el.liveViewPlaceholder.textContent = 'Session ended';
         this.el.liveViewPlaceholder.style.display = 'flex';
         this.el.liveViewStatus.textContent = 'Completed';
 
-        // Check both exit code AND result status to determine success/error
         const resultStatus = data.result?.result?.status;
         const isSuccess = data.exitCode === 0 && resultStatus === 'success';
 
@@ -579,7 +770,6 @@ class App {
           this.setStatus('error', `Exit ${data.exitCode}`);
           this.setTabStatus('error');
         } else {
-          // Exit code 0 but result status is not success (e.g., login_failed)
           this.log('\n--- Completed with issues ---\n', 'stderr');
           this.setStatus('error', resultStatus || 'Failed');
           this.setTabStatus('error');
@@ -606,11 +796,8 @@ class App {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
-  // Strip ANSI escape codes from text
   stripAnsi(text) {
-    return text
-      .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')  // Full ANSI codes
-      .replace(/\[([0-9;]+)m/g, '');           // Partial codes like [30;46m
+    return text.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/\[([0-9;]+)m/g, '');
   }
 
   log(text, cls = '') {
@@ -618,7 +805,27 @@ class App {
     if (cls) span.className = cls;
     span.textContent = this.stripAnsi(text);
     this.el.outputLog.appendChild(span);
+
+    if (this.isNearBottom()) {
+      this.el.outputLog.scrollTop = this.el.outputLog.scrollHeight;
+    }
+    this.updateScrollButton();
+  }
+
+  isNearBottom() {
+    const el = this.el.outputLog;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+  }
+
+  updateScrollButton() {
+    if (this.el.scrollBottomBtn) {
+      this.el.scrollBottomBtn.style.display = this.isNearBottom() ? 'none' : 'flex';
+    }
+  }
+
+  scrollToBottom() {
     this.el.outputLog.scrollTop = this.el.outputLog.scrollHeight;
+    this.updateScrollButton();
   }
 
   async copyOutput() {
@@ -628,11 +835,10 @@ class App {
     try {
       await navigator.clipboard.writeText(text);
       const btn = this.el.copyOutputBtn;
-      const originalText = btn.textContent;
       btn.textContent = 'Copied!';
       btn.classList.add('btn-success');
       setTimeout(() => {
-        btn.textContent = originalText;
+        btn.textContent = 'Copy';
         btn.classList.remove('btn-success');
       }, 1500);
     } catch (e) {
@@ -683,8 +889,8 @@ class App {
 
   // Save
   openSaveModal() {
-    this.el.saveNameInput.value = this.isNewPayload ? 'new_payload' :
-        (this.selectedPayload?.replace('.json', '') + '_copy') || 'payload';
+    this.el.saveNameInput.value = this.isNewPayload ? 'new_task' :
+        (this.selectedPayload?.replace('.json', '') + '_copy') || 'task';
     this.el.saveModal.classList.add('active');
     this.el.saveNameInput.focus();
     this.el.saveNameInput.select();
@@ -694,46 +900,48 @@ class App {
     this.el.saveModal.classList.remove('active');
   }
 
-  // Update existing payload (save in place)
   async update() {
     if (!this.selectedPayload) {
-      this.setStatus('error', 'No payload selected');
+      this.setStatus('error', 'No task selected');
       return;
     }
 
-    // Show saving state
     const originalText = this.el.updateBtn.textContent;
     this.el.updateBtn.textContent = 'Saving...';
     this.el.updateBtn.disabled = true;
 
     try {
+      const instructionMatchesMaster = this.instructionMatchesMaster();
+
       const res = await fetch('/api/payloads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          app: this.el.appSelect.value,
+          app: this.getSelectedApp(),
           name: this.selectedPayload,
           payload: {
-            url: this.el.payloadUrl.value,
-            instruction: this.el.payloadInstruction.value,
+            ...(this.el.payloadUrl.value && this.el.payloadUrl.value !== this.currentCarrierConfig?.url && { url: this.el.payloadUrl.value }),
+            ...(!instructionMatchesMaster && { instruction: this.el.payloadInstruction.value }),
             maxSteps: this.el.maxSteps.value ? parseInt(this.el.maxSteps.value, 10) : (this.originalPayload?.maxSteps || 50),
-            // Model settings (include if set)
             ...(this.el.agentModel.value && { agentModel: this.el.agentModel.value }),
             ...(this.el.stagehandModel.value && { model: this.el.stagehandModel.value }),
-            // Proxy and profile settings (include if set, exclude if empty to remove from payload)
             ...(this.el.proxyType.value && { proxyType: this.el.proxyType.value }),
             ...(this.el.proxyCountry.value && { proxyCountry: this.el.proxyCountry.value }),
             ...(this.el.profileName.value && { profileName: this.el.profileName.value }),
             variables: {
               ...(this.originalPayload?.variables || {}),
-              // Only include if non-empty
+              ...(this.el.varCarrier.value && { carrier: this.el.varCarrier.selectedOptions[0]?.text || '' }),
+              ...(this.el.varClientName.value && { clientName: this.el.varClientName.value }),
               ...(this.el.varGroupNumber.value && { groupNumber: this.el.varGroupNumber.value }),
               ...(this.el.varInvoiceMonth.value && { invoiceMonth: this.el.varInvoiceMonth.value }),
               ...(this.el.varInvoiceYear.value && { invoiceYear: this.el.varInvoiceYear.value }),
-              // Include credentials if provided
-              ...(this.el.varUsername.value && { username: this.el.varUsername.value }),
-              ...(this.el.varPassword.value && { password: this.el.varPassword.value }),
-              ...(this.el.varTotpSecret.value && { totpSecret: this.el.varTotpSecret.value }),
+              ...(this.clearCredentialsFlag
+                ? { username: '__CLEAR__', password: '__CLEAR__', totpSecret: '__CLEAR__' }
+                : {
+                    ...(this.el.varUsername.value && { username: this.el.varUsername.value }),
+                    ...(this.el.varPassword.value && { password: this.el.varPassword.value }),
+                    ...(this.el.varTotpSecret.value && { totpSecret: this.el.varTotpSecret.value }),
+                  }),
             },
           },
           originalName: this.selectedPayload,
@@ -743,19 +951,16 @@ class App {
       if (!res.ok) {
         this.el.updateBtn.textContent = originalText;
         this.el.updateBtn.disabled = false;
-        this.setStatus('error', 'Update failed');
+        this.setStatus('error', 'Save failed');
         return;
       }
 
-      // Show saved confirmation
       this.el.updateBtn.textContent = 'Saved!';
       this.el.updateBtn.classList.add('btn-success');
       this.setStatus('success', 'Saved');
 
-      // Reload to get fresh data (credentials masked, etc.)
       await this.selectPayload(this.selectedPayload);
 
-      // Reset button after delay
       setTimeout(() => {
         this.el.updateBtn.textContent = originalText;
         this.el.updateBtn.classList.remove('btn-success');
@@ -764,7 +969,7 @@ class App {
     } catch {
       this.el.updateBtn.textContent = originalText;
       this.el.updateBtn.disabled = false;
-      this.setStatus('error', 'Update failed');
+      this.setStatus('error', 'Save failed');
     }
   }
 
@@ -773,38 +978,35 @@ class App {
     if (!name) return;
 
     const fileName = name.endsWith('.json') ? name : `${name}.json`;
+    const instructionMatchesMaster = this.instructionMatchesMaster();
 
     try {
       const res = await fetch('/api/payloads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          app: this.el.appSelect.value,
+          app: this.getSelectedApp(),
           name: fileName,
           payload: {
-            url: this.el.payloadUrl.value,
-            instruction: this.el.payloadInstruction.value,
-            maxSteps: this.el.maxSteps.value ? parseInt(this.el.maxSteps.value, 10) : (this.originalPayload?.maxSteps || 50),
-            // Model settings (only include if set)
+            ...(this.el.payloadUrl.value && this.el.payloadUrl.value !== this.currentCarrierConfig?.url && { url: this.el.payloadUrl.value }),
+            ...(!instructionMatchesMaster && { instruction: this.el.payloadInstruction.value }),
+            maxSteps: this.el.maxSteps.value ? parseInt(this.el.maxSteps.value, 10) : 50,
             ...(this.el.agentModel.value && { agentModel: this.el.agentModel.value }),
             ...(this.el.stagehandModel.value && { model: this.el.stagehandModel.value }),
-            // Proxy and profile settings (only include if set)
             ...(this.el.proxyType.value && { proxyType: this.el.proxyType.value }),
             ...(this.el.proxyCountry.value && { proxyCountry: this.el.proxyCountry.value }),
             ...(this.el.profileName.value && { profileName: this.el.profileName.value }),
             variables: {
-              ...(this.originalPayload?.variables || {}),
-              // Only include if non-empty
+              ...(this.el.varCarrier.value && { carrier: this.el.varCarrier.selectedOptions[0]?.text || '' }),
+              ...(this.el.varClientName.value && { clientName: this.el.varClientName.value }),
               ...(this.el.varGroupNumber.value && { groupNumber: this.el.varGroupNumber.value }),
               ...(this.el.varInvoiceMonth.value && { invoiceMonth: this.el.varInvoiceMonth.value }),
               ...(this.el.varInvoiceYear.value && { invoiceYear: this.el.varInvoiceYear.value }),
-              // Include credentials if provided (for new payloads)
               ...(this.el.varUsername.value && { username: this.el.varUsername.value }),
               ...(this.el.varPassword.value && { password: this.el.varPassword.value }),
               ...(this.el.varTotpSecret.value && { totpSecret: this.el.varTotpSecret.value }),
             },
           },
-          originalName: this.selectedPayload,
         }),
       });
 
@@ -836,28 +1038,17 @@ class App {
 
   async loadResults() {
     const container = this.el.resultsPanelContent;
-    container.innerHTML = `
-      <div class="empty-results">
-        <div class="empty-results-icon">📁</div>
-        <h4>Loading...</h4>
-      </div>
-    `;
+    const app = this.getSelectedApp();
+    container.innerHTML = `<div class="empty-results"><div class="empty-results-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div><h4>Loading...</h4></div>`;
 
     try {
-      const res = await fetch('/api/sessions');
+      const res = await fetch(`/api/sessions?app=${app}`);
       const sessions = await res.json();
 
-      // Filter to only sessions that have downloaded files
       const sessionsWithFiles = sessions.filter(s => s.files && s.files.length > 0);
 
       if (!sessionsWithFiles.length) {
-        container.innerHTML = `
-          <div class="empty-results">
-            <div class="empty-results-icon">📁</div>
-            <h4>No files yet</h4>
-            <p>Downloaded files will appear here</p>
-          </div>
-        `;
+        container.innerHTML = `<div class="empty-results"><div class="empty-results-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div><h4>No files yet</h4><p>Downloaded files will appear here</p></div>`;
         return;
       }
 
@@ -872,16 +1063,13 @@ class App {
               <div class="results-file-list">
                 ${session.files.map(file => `
                   <div class="results-file-item">
-                    <div class="results-file-icon">
-                      ${this.getFileIcon(file.filename)}
-                    </div>
+                    <div class="results-file-icon">${this.getFileIcon(file.filename)}</div>
                     <div class="results-file-info">
                       <div class="results-file-name" title="${file.filename}">${file.filename}</div>
                       <div class="results-file-meta">${this.formatSize(file.size)}</div>
                     </div>
                     <div class="results-file-actions">
-                      <a href="/api/sessions/${session.id}/files/${encodeURIComponent(file.filename)}" class="btn btn-sm" download>Download</a>
-                      <button class="btn btn-sm btn-primary" onclick="window.open('/api/sessions/${session.id}/files/${encodeURIComponent(file.filename)}?view=true', '_blank')">View</button>
+                      <a href="/api/sessions/${session.id}/files/${encodeURIComponent(file.filename)}?app=${app}" class="btn btn-sm" download>Download</a>
                     </div>
                   </div>
                 `).join('')}
@@ -891,31 +1079,12 @@ class App {
         </div>
       `;
     } catch (e) {
-      container.innerHTML = `
-        <div class="empty-results">
-          <div class="empty-results-icon">⚠️</div>
-          <h4>Error loading files</h4>
-          <p>Please try again</p>
-        </div>
-      `;
+      container.innerHTML = `<div class="empty-results"><h4>Error loading files</h4></div>`;
     }
   }
 
   getFileIcon(filename) {
-    const ext = filename.split('.').pop().toLowerCase();
-    if (ext === 'pdf') {
-      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-        <polyline points="14 2 14 8 20 8"></polyline>
-        <line x1="16" y1="13" x2="8" y2="13"></line>
-        <line x1="16" y1="17" x2="8" y2="17"></line>
-        <polyline points="10 9 9 9 8 9"></polyline>
-      </svg>`;
-    }
-    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
-      <polyline points="13 2 13 9 20 9"></polyline>
-    </svg>`;
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`;
   }
 
   formatDate(dateStr) {
@@ -931,46 +1100,28 @@ class App {
   // History
   async loadHistory() {
     const container = this.el.historyList;
-    container.innerHTML = `
-      <div class="empty-history">
-        <div class="empty-history-icon">📼</div>
-        <h4>Loading...</h4>
-      </div>
-    `;
+    const app = this.getSelectedApp();
+    container.innerHTML = `<div class="empty-history"><div class="empty-history-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg></div><h4>Loading...</h4></div>`;
 
-    // Hide detail view, show list
     this.el.historyDetail.style.display = 'none';
     document.querySelector('.history-container').style.display = 'flex';
 
     try {
-      const res = await fetch('/api/sessions');
+      const res = await fetch(`/api/sessions?app=${app}`);
       const sessions = await res.json();
 
       if (!sessions.length) {
-        container.innerHTML = `
-          <div class="empty-history">
-            <div class="empty-history-icon">📼</div>
-            <h4>No recordings yet</h4>
-            <p>Session recordings will appear here after runs complete</p>
-          </div>
-        `;
+        container.innerHTML = `<div class="empty-history"><div class="empty-history-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg></div><h4>No recordings yet</h4><p>Session recordings will appear here</p></div>`;
         return;
       }
 
       container.innerHTML = sessions.map(session => `
-        <div class="history-item" data-session-id="${session.id}">
+        <div class="history-item" data-session-id="${session.id}" data-app="${app}">
           <div class="history-item-icon">
-            ${session.hasRecording ? `
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="23 7 16 12 23 17 23 7"></polygon>
-                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-              </svg>
-            ` : `
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-              </svg>
-            `}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="23 7 16 12 23 17 23 7"></polygon>
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+            </svg>
           </div>
           <div class="history-item-info">
             <div class="history-item-title">${session.payloadName?.replace('.json', '') || 'Unknown'}</div>
@@ -982,47 +1133,37 @@ class App {
               ${session.files?.length ? `<span class="history-item-files">${session.files.length} file${session.files.length > 1 ? 's' : ''}</span>` : ''}
             </div>
           </div>
-          <svg class="history-item-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="history-item-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
         </div>
       `).join('');
     } catch (e) {
-      container.innerHTML = `
-        <div class="empty-history">
-          <div class="empty-history-icon">⚠️</div>
-          <h4>Error loading history</h4>
-          <p>Please try again</p>
-        </div>
-      `;
+      container.innerHTML = `<div class="empty-history"><h4>Error loading history</h4></div>`;
     }
   }
 
-  async viewHistoryDetail(sessionId) {
+  async viewHistoryDetail(sessionId, app) {
+    const appName = app || this.getSelectedApp();
+    this.currentHistoryApp = appName;
     try {
-      const res = await fetch(`/api/sessions/${sessionId}`);
+      const res = await fetch(`/api/sessions/${sessionId}?app=${appName}`);
       const session = await res.json();
 
-      // Hide list, show detail
       document.querySelector('.history-container').style.display = 'none';
       this.el.historyDetail.style.display = 'flex';
 
-      // Set title
       this.el.historyDetailTitle.textContent = session.payloadName?.replace('.json', '') || 'Session Details';
+      this.renderSessionFiles(sessionId, session.files || [], appName);
 
-      // Show downloaded files first (at top)
-      this.renderSessionFiles(sessionId, session.files || []);
-
-      // Hide video by default, set up for toggle
       this.el.historyVideo.src = '';
       this.el.historyVideo.style.display = 'none';
       document.querySelector('.history-video-container').style.display = 'none';
       this.currentSessionHasRecording = session.hasRecording;
-      this.currentSessionRecordingUrl = session.hasRecording ? `/api/sessions/${sessionId}/recording` : null;
+      this.currentSessionRecordingUrl = session.hasRecording ? `/api/sessions/${sessionId}/recording?app=${appName}` : null;
 
-      // Show "Show Recording" button if local recording exists
       if (session.hasRecording) {
-        this.el.historyDownloadVideo.href = `/api/sessions/${sessionId}/recording`;
+        this.el.historyDownloadVideo.href = `/api/sessions/${sessionId}/recording?app=${appName}`;
         this.el.historyDownloadVideo.download = `recording_${sessionId}.mp4`;
         this.el.historyDownloadVideo.textContent = 'Show Recording';
         this.el.historyDownloadVideo.style.display = 'inline-flex';
@@ -1031,7 +1172,6 @@ class App {
         this.el.historyDownloadVideo.style.display = 'none';
       }
 
-      // Always show "View Recording Online" button when we have a replay URL
       if (session.replayViewUrl) {
         this.el.historyViewOnline.href = session.replayViewUrl;
         this.el.historyViewOnline.style.display = 'inline-flex';
@@ -1039,7 +1179,6 @@ class App {
         this.el.historyViewOnline.style.display = 'none';
       }
 
-      // Reset log view
       this.el.historyLogContainer.style.display = 'none';
       this.el.historyLog.textContent = '';
       this.currentHistorySessionId = sessionId;
@@ -1053,7 +1192,6 @@ class App {
     const videoContainer = document.querySelector('.history-video-container');
 
     if (this.recordingVisible) {
-      // Hide recording
       this.el.historyVideo.pause();
       this.el.historyVideo.src = '';
       this.el.historyVideo.style.display = 'none';
@@ -1061,7 +1199,6 @@ class App {
       this.el.historyDownloadVideo.textContent = 'Show Recording';
       this.recordingVisible = false;
     } else {
-      // Show recording
       this.el.historyVideo.src = this.currentSessionRecordingUrl;
       this.el.historyVideo.style.display = 'block';
       videoContainer.style.display = 'block';
@@ -1071,14 +1208,13 @@ class App {
     }
   }
 
-  renderSessionFiles(sessionId, files) {
+  renderSessionFiles(sessionId, files, app) {
+    const appName = app || this.currentHistoryApp || this.getSelectedApp();
     let container = document.getElementById('history-files-container');
     if (!container) {
-      // Create the files container if it doesn't exist
       container = document.createElement('div');
       container.id = 'history-files-container';
       container.className = 'history-files-container';
-      // Insert at the top of detail content (before video container)
       const detailContent = document.querySelector('.history-detail-content');
       detailContent.insertBefore(container, detailContent.firstChild);
     }
@@ -1101,8 +1237,7 @@ class App {
               <div class="history-file-size">${this.formatSize(file.size)}</div>
             </div>
             <div class="history-file-actions">
-              <a href="/api/sessions/${sessionId}/files/${encodeURIComponent(file.filename)}" class="btn btn-sm" download>Download</a>
-              <button class="btn btn-sm btn-primary" onclick="window.open('/api/sessions/${sessionId}/files/${encodeURIComponent(file.filename)}?view=true', '_blank')">View</button>
+              <a href="/api/sessions/${sessionId}/files/${encodeURIComponent(file.filename)}?app=${appName}" class="btn btn-sm" download>Download</a>
             </div>
           </div>
         `).join('')}
@@ -1112,9 +1247,9 @@ class App {
 
   async toggleHistoryLog() {
     if (this.el.historyLogContainer.style.display === 'none') {
-      // Load and show log
       try {
-        const res = await fetch(`/api/sessions/${this.currentHistorySessionId}/log`);
+        const app = this.currentHistoryApp || this.getSelectedApp();
+        const res = await fetch(`/api/sessions/${this.currentHistorySessionId}/log?app=${app}`);
         const log = await res.text();
         this.el.historyLog.textContent = this.stripAnsi(log);
         this.el.historyLogContainer.style.display = 'block';
@@ -1123,7 +1258,6 @@ class App {
         this.setStatus('error', 'Failed to load log');
       }
     } else {
-      // Hide log
       this.el.historyLogContainer.style.display = 'none';
       this.el.historyViewLog.textContent = 'View Log';
     }
@@ -1136,11 +1270,10 @@ class App {
     try {
       await navigator.clipboard.writeText(text);
       const btn = this.el.historyCopyLogBtn;
-      const originalText = btn.textContent;
       btn.textContent = 'Copied!';
       btn.classList.add('btn-success');
       setTimeout(() => {
-        btn.textContent = originalText;
+        btn.textContent = 'Copy';
         btn.classList.remove('btn-success');
       }, 1500);
     } catch (e) {
@@ -1156,38 +1289,52 @@ class App {
   }
 
   bindEvents() {
+    // Sidebar & theme
     this.el.sidebarToggle.addEventListener('click', () => this.toggleSidebar());
     this.el.themeToggle.addEventListener('click', () => this.toggleTheme());
+
+    // Task list
     this.el.newPayloadBtn.addEventListener('click', () => this.newPayload());
     this.el.refreshBtn.addEventListener('click', () => this.loadPayloads());
+    this.el.payloadList.addEventListener('click', e => {
+      const item = e.target.closest('.task-item');
+      if (item?.dataset.name) this.selectPayload(item.dataset.name);
+    });
+
+    // Instructions
+    this.el.instructionsCustomizeBtn.addEventListener('click', () => this.expandInstructions());
+    this.el.instructionsCollapseBtn.addEventListener('click', () => this.collapseInstructions());
+    this.el.instructionsResetBtn.addEventListener('click', () => this.resetToMasterPrompt());
+    this.el.payloadInstruction.addEventListener('input', () => this.updateInstructionsStatus());
+
+    // Advanced settings (inline)
+    this.el.advancedSettingsToggle.addEventListener('click', () => this.toggleAdvancedSettings());
+
+    // Actions
     this.el.runBtn.addEventListener('click', () => this.run());
     this.el.stopBtn.addEventListener('click', () => this.stop());
     this.el.saveBtn.addEventListener('click', () => this.openSaveModal());
     this.el.updateBtn.addEventListener('click', () => this.update());
+
+    // Output
     this.el.copyOutputBtn.addEventListener('click', () => this.copyOutput());
-    this.el.clearOutputBtn.addEventListener('click', () => this.el.outputLog.textContent = '');
+    this.el.clearOutputBtn.addEventListener('click', () => {
+      this.el.outputLog.textContent = '';
+      this.updateScrollButton();
+    });
+    this.el.scrollBottomBtn.addEventListener('click', () => this.scrollToBottom());
+    this.el.outputLog.addEventListener('scroll', () => this.updateScrollButton());
 
     // Theater mode
     this.el.theaterModeBtn.addEventListener('click', () => this.toggleTheaterMode());
-
-    // Double-click overlay to toggle theater mode (overlay captures events since iframes don't bubble)
     this.el.liveViewOverlay.addEventListener('dblclick', () => this.toggleTheaterMode());
 
-    // Click output card header to expand/collapse in theater mode
-    const outputCard = this.el.outputLog.closest('.card');
-    const outputHeader = outputCard.querySelector('.card-header');
-    outputHeader.addEventListener('click', () => {
-      if (this.theaterMode) {
-        outputCard.classList.toggle('expanded');
-      }
-    });
-
-    // Tab switching
-    this.el.tabEditor.addEventListener('click', () => this.switchTab('editor'));
+    // Tabs
+    this.el.tabEditor.addEventListener('click', () => this.switchTab('task'));
     this.el.tabLiveView.addEventListener('click', () => this.switchTab('live-view'));
     this.el.tabHistory.addEventListener('click', () => this.switchTab('history'));
 
-    // History tab events
+    // History
     this.el.refreshHistoryBtn.addEventListener('click', () => this.loadHistory());
     this.el.historyBackBtn.addEventListener('click', () => this.hideHistoryDetail());
     this.el.historyDownloadVideo.addEventListener('click', (e) => this.toggleRecording(e));
@@ -1195,9 +1342,7 @@ class App {
     this.el.historyCopyLogBtn.addEventListener('click', () => this.copyHistoryLog());
     this.el.historyList.addEventListener('click', (e) => {
       const item = e.target.closest('.history-item');
-      if (item?.dataset.sessionId) {
-        this.viewHistoryDetail(item.dataset.sessionId);
-      }
+      if (item?.dataset.sessionId) this.viewHistoryDetail(item.dataset.sessionId, item.dataset.app);
     });
 
     // Results panel
@@ -1205,6 +1350,7 @@ class App {
     this.el.resultsPanelClose.addEventListener('click', () => this.closeResultsPanel());
     this.el.resultsPanelOverlay.addEventListener('click', () => this.closeResultsPanel());
 
+    // Save modal
     this.el.saveCancelBtn.addEventListener('click', () => this.closeSaveModal());
     this.el.saveConfirmBtn.addEventListener('click', () => this.save());
     this.el.saveModal.addEventListener('click', e => {
@@ -1214,27 +1360,25 @@ class App {
       if (e.key === 'Enter') this.save();
     });
 
-    this.el.payloadList.addEventListener('click', e => {
-      const li = e.target.closest('li');
-      if (li?.dataset.name) this.selectPayload(li.dataset.name);
-    });
-
-    // Credentials toggle and input handlers
-    this.el.credentialsToggle.addEventListener('click', () => this.toggleCredentials());
-    this.el.varUsername.addEventListener('input', () => this.updateCredentialsStatus());
-    this.el.varPassword.addEventListener('input', () => this.updateCredentialsStatus());
-    this.el.varTotpSecret.addEventListener('input', () => this.updateCredentialsStatus());
-
-    // Proxy type change handler
+    // Carrier & proxy
+    this.el.varCarrier.addEventListener('change', () => this.onCarrierChange());
     this.el.proxyType.addEventListener('change', () => this.updateProxyCountryVisibility());
 
-    // App selector change handler
-    this.el.appSelect.addEventListener('change', () => this.onAppChange());
+    // Credentials
+    if (this.el.clearCredentialsBtn) {
+      this.el.clearCredentialsBtn.addEventListener('click', () => this.clearStoredCredentials());
+    }
 
-    document.querySelectorAll('.variable-tag').forEach(tag => {
-      tag.addEventListener('click', () => this.insertVariable(tag.dataset.var));
+    // App switcher
+    this.el.appSwitcher.addEventListener('click', (e) => {
+      const btn = e.target.closest('.app-switcher-btn');
+      if (btn && !btn.classList.contains('active')) {
+        this.setSelectedApp(btn.dataset.app);
+        this.onAppChange();
+      }
     });
 
+    // Keyboard shortcuts
     document.addEventListener('keydown', e => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !this.isRunning) {
         e.preventDefault();
@@ -1243,9 +1387,9 @@ class App {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
         if (this.selectedPayload && !this.isNewPayload) {
-          this.update();  // Update existing payload
+          this.update();
         } else {
-          this.openSaveModal();  // Save as new
+          this.openSaveModal();
         }
       }
       if (e.key === 'Escape') {
@@ -1255,11 +1399,12 @@ class App {
           this.closeResultsPanel();
         } else if (this.el.saveModal.classList.contains('active')) {
           this.closeSaveModal();
+        } else if (this.el.advancedSettings.classList.contains('expanded')) {
+          this.collapseAdvancedSettings();
         } else if (this.isRunning) {
           this.stop();
         }
       }
-      // 'T' key to toggle theater mode (when not typing and live view is visible)
       if (e.key === 't' || e.key === 'T') {
         const target = e.target;
         const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
@@ -1269,7 +1414,6 @@ class App {
           this.toggleTheaterMode();
         }
       }
-      // '[' key to toggle sidebar (when not typing)
       if (e.key === '[') {
         const target = e.target;
         const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';

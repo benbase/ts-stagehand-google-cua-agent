@@ -1,0 +1,7 @@
+{
+  "instruction": "# Download Dental and Vision Plan Presentation\n\nYou are at %url%.\n\n## Task\n\nDownload the combined Dental and Vision Plan Presentation packet.\n\n1. Look for a link that says \"Click here for a combined Dental and Vision Plan Presentation packet\"\n2. Click the link to download the PDF file\n\n---\n\n## Best Practices\n\n- If clicking the link doesn't work, try navigating directly to the PDF URL\n- The file is located in the Download_Files folder\n- The file is named DVINS_All_Plan_Presentations_Valid_Until_Dec_2026.pdf\n- When the Save File dialog appears, click the Save button to complete the download\n- Do NOT report success until the file is actually saved\n\n---\n\n## Notes\n\n- Only report success AFTER clicking Save in the file dialog and seeing the dialog close\n- If the link is not found, report `download_failed` with details about what you see on the page\n",
+  "maxSteps": 30,
+  "variables": {
+    "carrier": "Wolfpack"
+  }
+}

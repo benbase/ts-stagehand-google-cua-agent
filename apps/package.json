@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "driver",
-    "navigator"
+    "navigator",
+    "old"
   ],
   "devDependencies": {
     "tsx": "^4.16.2",
