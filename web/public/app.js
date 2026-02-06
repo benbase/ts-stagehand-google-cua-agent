@@ -124,11 +124,13 @@ class App {
       resultsPanelOverlay: document.getElementById('results-panel-overlay'),
       resultsPanelClose: document.getElementById('results-panel-close'),
       resultsPanelContent: document.getElementById('results-panel-content'),
+      resultsSearchInput: document.getElementById('results-search-input'),
 
       // History
       tabHistory: document.getElementById('tab-history'),
       tabContentHistory: document.getElementById('tab-content-history'),
       historyList: document.getElementById('history-list'),
+      historySearchInput: document.getElementById('history-search-input'),
       refreshHistoryBtn: document.getElementById('refresh-history-btn'),
       historyDetail: document.getElementById('history-detail'),
       historyBackBtn: document.getElementById('history-back-btn'),
@@ -428,6 +430,9 @@ class App {
 
   async selectPayload(name) {
     try {
+      // Switch to the task tab when selecting a payload
+      this.switchTab('task');
+
       const app = this.getSelectedApp();
       const res = await fetch(`/api/payloads/${encodeURIComponent(name)}?app=${app}`);
       const payload = await res.json();
@@ -622,13 +627,15 @@ class App {
 
     this.isRunning = true;
     this.abortController = new AbortController();
+    this.lastCompletedSessionId = null;
+    this.lastCompletedApp = null;
 
     this.setStatus('running', 'Running...');
     this.el.runBtn.disabled = true;
     this.el.runBtn.classList.add('running');
     this.el.runBtnText.textContent = 'Running...';
     this.el.stopBtn.style.display = 'flex';
-    this.el.actionBarStatus.textContent = 'Running...';
+    this.el.actionBarStatus.textContent = '';
     this.el.outputLog.textContent = '';
 
     this.switchTab('live-view');
@@ -770,6 +777,11 @@ class App {
         this.setTabStatus('error');
         break;
 
+      case 'historySaved':
+        this.lastCompletedSessionId = data.sessionId;
+        this.lastCompletedApp = data.app;
+        break;
+
       case 'fileDownloaded':
         this.log(`\n📁 File saved: ${data.filename} (${this.formatSize(data.size)})\n`, 'info');
         break;
@@ -852,6 +864,28 @@ class App {
         msg.textContent = result.result.message;
         c.appendChild(msg);
       }
+    }
+
+    // "View Run Details" button — links to history detail for this session
+    if (this.lastCompletedSessionId) {
+      const actions = document.createElement('div');
+      actions.className = 'result-actions';
+
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-view-details';
+      btn.innerHTML = `
+        <span>View Run Details</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      `;
+      btn.addEventListener('click', () => {
+        this.switchTab('history');
+        this.viewHistoryDetail(this.lastCompletedSessionId, this.lastCompletedApp);
+      });
+
+      actions.appendChild(btn);
+      c.appendChild(actions);
     }
   }
 
@@ -1028,6 +1062,19 @@ class App {
     this.el.resultsPanelOverlay.classList.remove('active');
   }
 
+  filterResults() {
+    const query = this.el.resultsSearchInput.value.toLowerCase().trim();
+    const sessions = this.el.resultsPanelContent.querySelectorAll('.results-session');
+    sessions.forEach(session => {
+      if (!query) {
+        session.classList.remove('search-hidden');
+        return;
+      }
+      const text = session.textContent.toLowerCase();
+      session.classList.toggle('search-hidden', !text.includes(query));
+    });
+  }
+
   async loadResults() {
     const container = this.el.resultsPanelContent;
     const app = this.getSelectedApp();
@@ -1047,10 +1094,15 @@ class App {
       container.innerHTML = `
         <div class="results-session-list">
           ${sessionsWithFiles.map(session => `
-            <div class="results-session">
+            <div class="results-session" data-session-id="${session.id}" data-app="${app}">
               <div class="results-session-header">
                 <span class="results-session-name">${session.payloadName?.replace('.json', '') || 'Session'}</span>
                 <span class="results-session-date">${this.formatDate(session.timestamp)}</span>
+                <a class="results-session-link" data-session-id="${session.id}" data-app="${app}" title="View session details">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </a>
               </div>
               <div class="results-file-list">
                 ${session.files.map(file => `
@@ -1070,6 +1122,18 @@ class App {
           `).join('')}
         </div>
       `;
+
+      // Bind session link clicks
+      container.querySelectorAll('.results-session-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          const sessionId = link.dataset.sessionId;
+          const sessionApp = link.dataset.app;
+          this.closeResultsPanel();
+          this.switchTab('history');
+          this.viewHistoryDetail(sessionId, sessionApp);
+        });
+      });
     } catch (e) {
       container.innerHTML = `<div class="empty-results"><h4>Error loading files</h4></div>`;
     }
@@ -1154,6 +1218,19 @@ class App {
     } catch (e) {
       container.innerHTML = `<div class="empty-history"><h4>Error loading history</h4></div>`;
     }
+  }
+
+  filterHistory() {
+    const query = this.el.historySearchInput.value.toLowerCase().trim();
+    const items = this.el.historyList.querySelectorAll('.history-item');
+    items.forEach(item => {
+      if (!query) {
+        item.classList.remove('search-hidden');
+        return;
+      }
+      const text = item.textContent.toLowerCase();
+      item.classList.toggle('search-hidden', !text.includes(query));
+    });
   }
 
   escapeHtml(text) {
@@ -1367,6 +1444,7 @@ class App {
     // History
     this.el.refreshHistoryBtn.addEventListener('click', () => this.loadHistory());
     this.el.historyBackBtn.addEventListener('click', () => this.hideHistoryDetail());
+    this.el.historySearchInput.addEventListener('input', () => this.filterHistory());
     this.el.historyCopyLogBtn.addEventListener('click', () => this.copyHistoryLog());
     this.el.runLogExpandBtn.addEventListener('click', () => this.toggleLogExpand());
     this.el.historyList.addEventListener('click', (e) => {
@@ -1378,6 +1456,7 @@ class App {
     this.el.resultsToggle.addEventListener('click', () => this.openResultsPanel());
     this.el.resultsPanelClose.addEventListener('click', () => this.closeResultsPanel());
     this.el.resultsPanelOverlay.addEventListener('click', () => this.closeResultsPanel());
+    this.el.resultsSearchInput.addEventListener('input', () => this.filterResults());
 
     // Save modal
     this.el.saveCancelBtn.addEventListener('click', () => this.closeSaveModal());
