@@ -48,9 +48,21 @@ IMPORTANT TOOLS:
 - When the task is complete or cannot continue, call report_result with the appropriate status.
 
 2FA HANDLING:
-- If you see a 2FA verification page asking for "Email" or "Text/Voice" options, choose Email and then call handle_2fa with type "email".
+- If you see a 2FA verification page with options like "Email" or "Text/Voice":
+  1. Click on the EMAIL option to select it (some pages require you to click on it even if it appears pre-selected)
+  2. Click the "Send code" / "Send" / "Send me an email" button to trigger the email
+  3. Wait for the page to transition to the code entry screen
+  4. ONLY THEN call handle_2fa with type "email" — provide the coordinates of the code input field and the submit/confirm button
 - If you see an authenticator code input, call handle_2fa with type "totp".
-- The handle_2fa tool will fetch or generate the code and enter it for you.
+- The handle_2fa tool will fetch or generate the code, enter it, and attempt to submit. After calling it, check the screenshot to verify it worked.
+- IMPORTANT: Be very careful with the coordinates you pass to handle_2fa — double-check that X and Y are not swapped. The tool will also press Tab+Enter as a fallback in case the click misses the button.
+
+DATE MATCHING:
+- The task specifies a target month/year (e.g. "January 2026") along with the month number (e.g. "01") and year.
+- To match an invoice, ONLY the month and year matter. IGNORE the day completely.
+- For example, if looking for "January 2026" (month 01), then an invoice dated 01/12/2026 IS a match — the day 12 does not matter, only month=01 and year=2026.
+- Carrier websites display dates in various formats: MM/DD/YYYY, DD/MM/YYYY, YYYY-MM-DD, "Jan 2026", etc.
+- Do NOT confuse month 01 (January) with month 12 (December) — look at the month digits carefully.
 
 SCROLLING AND CONTENT VERIFICATION:
 - IMPORTANT: Before scrolling, CAREFULLY examine what is ALREADY VISIBLE on the screen. Tables and lists may already show the content you need.
@@ -82,25 +94,37 @@ const CUSTOM_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     name: 'perform_login',
     description: `Securely fill in login credentials. ALWAYS use this when you see a login form - never type credentials directly.
 
-The tool will:
-1. Click the username input field
-2. Type the username
-3. Click the password input field
-4. Type the password
-5. Click the submit button
+Some login pages show BOTH username and password fields at once. Others show only the username/email field first, and reveal the password field only after clicking a "Continue", "Next", or "Sign In" button.
 
-Provide normalized coordinates (0-1000 scale) for all three elements.`,
+SINGLE-STEP LOGIN (both fields visible):
+- Set mode to "single"
+- Provide usernameFieldX/Y, passwordFieldX/Y, and submitButtonX/Y
+
+TWO-STEP LOGIN (only username visible, password appears after continuing):
+- Set mode to "two_step"
+- Provide usernameFieldX/Y and continueButtonX/Y
+- The tool will enter the username, click continue, wait for the password field to appear, then take a screenshot
+- You will then need to call perform_login again with mode "password_only" to complete login
+
+PASSWORD-ONLY (second step of two-step login):
+- Set mode to "password_only"
+- Provide passwordFieldX/Y and submitButtonX/Y
+
+Provide normalized coordinates (0-1000 scale) for all elements.`,
     parameters: {
       type: Type.OBJECT,
       properties: {
+        mode: { type: Type.STRING, description: "Login mode: 'single' (both fields visible), 'two_step' (username first, then password), or 'password_only' (enter password and submit)" },
         usernameFieldX: { type: Type.NUMBER, description: 'X coordinate (0-1000) of username input' },
         usernameFieldY: { type: Type.NUMBER, description: 'Y coordinate (0-1000) of username input' },
         passwordFieldX: { type: Type.NUMBER, description: 'X coordinate (0-1000) of password input' },
         passwordFieldY: { type: Type.NUMBER, description: 'Y coordinate (0-1000) of password input' },
         submitButtonX: { type: Type.NUMBER, description: 'X coordinate (0-1000) of submit button' },
         submitButtonY: { type: Type.NUMBER, description: 'Y coordinate (0-1000) of submit button' },
+        continueButtonX: { type: Type.NUMBER, description: 'X coordinate (0-1000) of continue/next button (for two_step mode)' },
+        continueButtonY: { type: Type.NUMBER, description: 'Y coordinate (0-1000) of continue/next button (for two_step mode)' },
       },
-      required: ['usernameFieldX', 'usernameFieldY', 'passwordFieldX', 'passwordFieldY', 'submitButtonX', 'submitButtonY'],
+      required: ['mode'],
     },
   },
   {
@@ -151,12 +175,15 @@ Provide the coordinates of the code input field and submit button.`,
 ];
 
 export interface PerformLoginParams {
-  usernameFieldX: number;
-  usernameFieldY: number;
-  passwordFieldX: number;
-  passwordFieldY: number;
-  submitButtonX: number;
-  submitButtonY: number;
+  mode: 'single' | 'two_step' | 'password_only';
+  usernameFieldX?: number;
+  usernameFieldY?: number;
+  passwordFieldX?: number;
+  passwordFieldY?: number;
+  submitButtonX?: number;
+  submitButtonY?: number;
+  continueButtonX?: number;
+  continueButtonY?: number;
 }
 
 export interface Handle2FAParams {
@@ -562,6 +589,10 @@ export async function samplingLoop({
 /**
  * Execute the perform_login tool using Computer Controls.
  * Coordinates are in normalized scale (0-1000).
+ * Supports three modes:
+ * - "single": Both username and password fields visible at once
+ * - "two_step": Only username visible; password appears after clicking continue
+ * - "password_only": Only password field (second step of two_step flow)
  */
 async function executeLogin(
   kernel: Kernel,
@@ -569,87 +600,117 @@ async function executeLogin(
   params: PerformLoginParams,
   credentials?: Credentials
 ): Promise<LoginResult> {
-  console.log('[perform_login] Starting secure login...');
+  const mode = params.mode || 'single';
+  console.log(`[perform_login] Starting secure login (mode: ${mode})...`);
 
-  if (!credentials?.username || !credentials?.password) {
-    return {
-      success: false,
-      message: 'No credentials provided',
-    };
+  if (mode !== 'password_only' && !credentials?.username) {
+    return { success: false, message: 'No username provided' };
+  }
+  if (mode !== 'two_step' && !credentials?.password) {
+    return { success: false, message: 'No password provided' };
   }
 
   // Denormalize coordinates (0-1000 to pixel values)
   const screenWidth = 1200;
   const screenHeight = 800;
   const scale = 1000;
-
-  const usernameX = Math.round((params.usernameFieldX / scale) * screenWidth);
-  const usernameY = Math.round((params.usernameFieldY / scale) * screenHeight);
-  const passwordX = Math.round((params.passwordFieldX / scale) * screenWidth);
-  const passwordY = Math.round((params.passwordFieldY / scale) * screenHeight);
-  const submitX = Math.round((params.submitButtonX / scale) * screenWidth);
-  const submitY = Math.round((params.submitButtonY / scale) * screenHeight);
+  const denormX = (v: number) => Math.round((v / scale) * screenWidth);
+  const denormY = (v: number) => Math.round((v / scale) * screenHeight);
 
   try {
-    // Click username field
-    console.log(`[perform_login] Clicking username field at (${usernameX}, ${usernameY})`);
-    await kernel.browsers.computer.clickMouse(sessionId, {
-      x: usernameX,
-      y: usernameY,
-      button: 'left',
-      click_type: 'click',
-    });
-    await sleep(500);
+    if (mode === 'single') {
+      // Both fields visible — enter username, password, then submit
+      const usernameX = denormX(params.usernameFieldX!);
+      const usernameY = denormY(params.usernameFieldY!);
+      const passwordX = denormX(params.passwordFieldX!);
+      const passwordY = denormY(params.passwordFieldY!);
+      const submitX = denormX(params.submitButtonX!);
+      const submitY = denormY(params.submitButtonY!);
 
-    // Type username
-    console.log('[perform_login] Typing username...');
-    await kernel.browsers.computer.typeText(sessionId, {
-      text: credentials.username,
-      delay: 50,
-    });
-    await sleep(500);
+      console.log(`[perform_login] Clicking username field at (${usernameX}, ${usernameY})`);
+      await kernel.browsers.computer.clickMouse(sessionId, { x: usernameX, y: usernameY, button: 'left', click_type: 'click' });
+      await sleep(300);
+      await kernel.browsers.computer.pressKey(sessionId, { keys: ['ctrl+a'] });
+      await sleep(100);
 
-    // Click password field
-    console.log(`[perform_login] Clicking password field at (${passwordX}, ${passwordY})`);
-    await kernel.browsers.computer.clickMouse(sessionId, {
-      x: passwordX,
-      y: passwordY,
-      button: 'left',
-      click_type: 'click',
-    });
-    await sleep(500);
+      console.log('[perform_login] Typing username...');
+      await kernel.browsers.computer.typeText(sessionId, { text: credentials!.username, delay: 50 });
+      await sleep(500);
 
-    // Type password
-    console.log('[perform_login] Typing password...');
-    await kernel.browsers.computer.typeText(sessionId, {
-      text: credentials.password,
-      delay: 50,
-    });
-    await sleep(500);
+      console.log(`[perform_login] Clicking password field at (${passwordX}, ${passwordY})`);
+      await kernel.browsers.computer.clickMouse(sessionId, { x: passwordX, y: passwordY, button: 'left', click_type: 'click' });
+      await sleep(300);
+      await kernel.browsers.computer.pressKey(sessionId, { keys: ['ctrl+a'] });
+      await sleep(100);
 
-    // Click submit button
-    console.log(`[perform_login] Clicking submit button at (${submitX}, ${submitY})`);
-    await kernel.browsers.computer.clickMouse(sessionId, {
-      x: submitX,
-      y: submitY,
-      button: 'left',
-      click_type: 'click',
-    });
+      console.log('[perform_login] Typing password...');
+      await kernel.browsers.computer.typeText(sessionId, { text: credentials!.password, delay: 50 });
+      await sleep(500);
 
-    // Wait for page to process login
-    console.log('[perform_login] Waiting for login to process...');
-    await sleep(5000);
+      console.log(`[perform_login] Clicking submit button at (${submitX}, ${submitY})`);
+      await kernel.browsers.computer.clickMouse(sessionId, { x: submitX, y: submitY, button: 'left', click_type: 'click' });
 
-    return {
-      success: true,
-      message: 'Login credentials entered and submitted. Check the next screenshot to verify if login was successful.',
-    };
+      console.log('[perform_login] Waiting for login to process...');
+      await sleep(5000);
+
+      return { success: true, message: 'Login credentials entered and submitted. Check the next screenshot to verify if login was successful.' };
+
+    } else if (mode === 'two_step') {
+      // Only username visible — enter username and click continue
+      const usernameX = denormX(params.usernameFieldX!);
+      const usernameY = denormY(params.usernameFieldY!);
+      const continueX = denormX(params.continueButtonX!);
+      const continueY = denormY(params.continueButtonY!);
+
+      console.log(`[perform_login] Clicking username field at (${usernameX}, ${usernameY})`);
+      await kernel.browsers.computer.clickMouse(sessionId, { x: usernameX, y: usernameY, button: 'left', click_type: 'click' });
+      await sleep(300);
+      await kernel.browsers.computer.pressKey(sessionId, { keys: ['ctrl+a'] });
+      await sleep(100);
+
+      console.log('[perform_login] Typing username...');
+      await kernel.browsers.computer.typeText(sessionId, { text: credentials!.username, delay: 50 });
+      await sleep(500);
+
+      console.log(`[perform_login] Clicking continue button at (${continueX}, ${continueY})`);
+      await kernel.browsers.computer.clickMouse(sessionId, { x: continueX, y: continueY, button: 'left', click_type: 'click' });
+
+      console.log('[perform_login] Waiting for password field to appear...');
+      await sleep(3000);
+
+      return { success: true, message: 'Username entered and continue clicked. The password field should now be visible. Call perform_login again with mode "password_only" to enter the password and submit.' };
+
+    } else if (mode === 'password_only') {
+      // Password field now visible — enter password and submit
+      const passwordX = denormX(params.passwordFieldX!);
+      const passwordY = denormY(params.passwordFieldY!);
+      const submitX = denormX(params.submitButtonX!);
+      const submitY = denormY(params.submitButtonY!);
+
+      console.log(`[perform_login] Clicking password field at (${passwordX}, ${passwordY})`);
+      await kernel.browsers.computer.clickMouse(sessionId, { x: passwordX, y: passwordY, button: 'left', click_type: 'click' });
+      await sleep(300);
+      await kernel.browsers.computer.pressKey(sessionId, { keys: ['ctrl+a'] });
+      await sleep(100);
+
+      console.log('[perform_login] Typing password...');
+      await kernel.browsers.computer.typeText(sessionId, { text: credentials!.password, delay: 50 });
+      await sleep(500);
+
+      console.log(`[perform_login] Clicking submit button at (${submitX}, ${submitY})`);
+      await kernel.browsers.computer.clickMouse(sessionId, { x: submitX, y: submitY, button: 'left', click_type: 'click' });
+
+      console.log('[perform_login] Waiting for login to process...');
+      await sleep(5000);
+
+      return { success: true, message: 'Password entered and submitted. Check the next screenshot to verify if login was successful.' };
+
+    } else {
+      return { success: false, message: `Unknown login mode: ${mode}` };
+    }
   } catch (error) {
     console.error('[perform_login] Error:', error);
-    return {
-      success: false,
-      message: `Login failed: ${String(error)}`,
-    };
+    return { success: false, message: `Login failed: ${String(error)}` };
   }
 }
 
@@ -680,13 +741,15 @@ async function execute2FA(
 
     if (params.type === 'email') {
       // Fetch email 2FA code from relay
-      const carrier = credentials?.carrier;
-      if (!carrier) {
+      // Use the first word of the carrier name (e.g. "Cigna Medical" → "Cigna")
+      const carrierRaw = credentials?.carrier;
+      if (!carrierRaw) {
         return {
           success: false,
           message: 'No carrier configured for email 2FA lookup',
         };
       }
+      const carrier = carrierRaw.split(' ')[0];
 
       // Wait a bit for the email to arrive
       console.log('[handle_2fa] Waiting for email to arrive...');
@@ -753,6 +816,14 @@ async function execute2FA(
       button: 'left',
       click_type: 'click',
     });
+    await sleep(1000);
+
+    // Fallback: use Tab to reach the submit button and press Enter
+    // This handles cases where the click coordinates miss the button
+    console.log('[handle_2fa] Pressing Tab + Enter as fallback for submit...');
+    await kernel.browsers.computer.pressKey(sessionId, { keys: ['Tab'] });
+    await sleep(300);
+    await kernel.browsers.computer.pressKey(sessionId, { keys: ['Return'] });
 
     // Wait for verification to process
     console.log('[handle_2fa] Waiting for verification to process...');

@@ -5,7 +5,7 @@ You are at %url% for carrier **%carrier%**.
 ## Task
 
 1. Locate the group client **%clientName%** (Group Number: **%groupNumber%**)
-2. Find and download the invoice for **%invoiceMonth% %invoiceYear%**
+2. Find and download the invoice for **%invoiceMonth% %invoiceYear%** (month number: **%invoiceMonthNumber%**, year: **%invoiceYear%**). Match any invoice where the month is %invoiceMonthNumber% and year is %invoiceYear% — ignore the day.
 
 ---
 
@@ -20,18 +20,16 @@ You are at %url% for carrier **%carrier%**.
 
 ### UHC (United Healthcare)
 
-- **Follow navigation through all windows** - UHC opens multiple tabs/windows during navigation
 - Use OneHealthcare ID login flow when prompted
-- After login, navigate to: Billing & Payments > View Billing Statements
-- Select the correct account from the dropdown if multiple accounts exist
-- The invoice PDF may open in a new window - ensure you download from the correct window
+- After login, navigate to: Billing & Payments
+- Search for the correct group by the ID not by name
 
 ### Guardian
 
 - **If search returns an error, try again** - the search feature can be flaky
-- Use the "Accounts" or "Groups" section to find your client
-- Invoices are typically under "Billing" > "Statements" or "View Bills"
-- Guardian may require selecting a specific coverage type (Dental, Vision, Life) before showing invoices
+- Invoices are typically under the menu tab "Client billing"
+- In Billing statements page, scroll slowly to make sure one can see all the invoices
+- When the Save File dialog appears, click the Save button to complete the download. Do NOT report success until the file is actually saved
 
 ### Rippling
 

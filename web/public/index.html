@@ -102,103 +102,100 @@
 
           <!-- Configuration Form -->
           <div class="task-config-form" id="task-config-form" style="display: none;">
-            <div class="config-section">
-              <h3 class="config-section-title">Configuration</h3>
-
-              <div class="config-field">
-                <label for="var-carrier">Carrier</label>
-                <select id="var-carrier">
-                  <option value="">Loading carriers...</option>
-                </select>
-              </div>
-
-              <div class="config-field">
-                <label for="var-client-name">Client Name</label>
-                <input type="text" id="var-client-name" placeholder="e.g., Acme Corporation">
-              </div>
-
-              <div class="config-field">
-                <label for="var-group-number">Group Number</label>
-                <input type="text" id="var-group-number" placeholder="e.g., 730199">
-              </div>
-
-              <div class="config-row">
-                <div class="config-field">
-                  <label for="var-invoice-month">Month</label>
-                  <select id="var-invoice-month">
-                    <option value="">Select...</option>
-                    <option value="January">January</option>
-                    <option value="February">February</option>
-                    <option value="March">March</option>
-                    <option value="April">April</option>
-                    <option value="May">May</option>
-                    <option value="June">June</option>
-                    <option value="July">July</option>
-                    <option value="August">August</option>
-                    <option value="September">September</option>
-                    <option value="October">October</option>
-                    <option value="November">November</option>
-                    <option value="December">December</option>
-                  </select>
-                </div>
-                <div class="config-field">
-                  <label for="var-invoice-year">Year</label>
-                  <input type="text" id="var-invoice-year" placeholder="2025">
-                </div>
+            <!-- Task Header -->
+            <div class="task-header">
+              <h2 class="task-header-title" id="task-header-title">Task</h2>
+              <div class="task-header-actions">
+                <button class="btn btn-primary btn-sm" id="update-btn" disabled>Save</button>
+                <button class="btn btn-sm" id="save-btn" disabled>Save as...</button>
               </div>
             </div>
 
-            <!-- AOP Section -->
-            <div class="config-section">
-              <h3 class="config-section-title">AOP (Agent Operating Procedure)</h3>
-
-              <!-- AOP Preview (collapsed state) -->
-              <div class="instructions-preview" id="instructions-preview">
-                <div class="instructions-preview-content" id="instructions-preview-content">
-                  Using default AOP...
+            <!-- Two-column body -->
+            <div class="task-body">
+              <!-- Left: AOP (hero) -->
+              <div class="task-body-main">
+                <div class="config-section aop-section">
+                  <div class="aop-header">
+                    <div class="aop-header-left">
+                      <h3 class="config-section-title">AOP</h3>
+                      <span class="aop-subtitle">Agent Operating Procedure</span>
+                    </div>
+                    <div class="aop-header-actions">
+                      <span class="instructions-status" id="instructions-status">
+                        <span class="instructions-status-dot"></span>
+                        <span id="instructions-status-text">Default</span>
+                      </span>
+                      <button type="button" class="instructions-reset-btn" id="instructions-reset-btn" style="display: none;">
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                  <textarea id="payload-instruction" placeholder="Step-by-step instructions for the agent..."></textarea>
                 </div>
-                <button type="button" class="instructions-customize-btn" id="instructions-customize-btn">
-                  Customize...
-                </button>
               </div>
 
-              <!-- AOP Editor (expanded state) -->
-              <div class="instructions-editor" id="instructions-editor" style="display: none;">
-                <div class="instructions-editor-header">
-                  <span class="instructions-status" id="instructions-status">
-                    <span class="instructions-status-dot"></span>
-                    <span id="instructions-status-text">Default</span>
-                  </span>
-                  <button type="button" class="instructions-reset-btn" id="instructions-reset-btn" style="display: none;">
-                    Reset to default
-                  </button>
-                  <button type="button" class="instructions-collapse-btn" id="instructions-collapse-btn">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="18 15 12 9 6 15"></polyline>
-                    </svg>
-                  </button>
+              <!-- Right: Config sidebar -->
+              <div class="task-body-sidebar">
+                <div class="sidebar-fields">
+                  <div class="config-field">
+                    <label for="var-carrier">Carrier</label>
+                    <select id="var-carrier">
+                      <option value="">Loading carriers...</option>
+                    </select>
+                  </div>
+                  <div class="config-field">
+                    <label for="var-client-name">Client</label>
+                    <input type="text" id="var-client-name" placeholder="e.g., Acme Corporation">
+                  </div>
+                  <div class="config-field">
+                    <label for="var-group-number">Group #</label>
+                    <input type="text" id="var-group-number" placeholder="730199">
+                  </div>
+                  <div class="config-field">
+                    <label for="payload-url">URL</label>
+                    <input type="url" id="payload-url" placeholder="Auto-filled from carrier">
+                  </div>
+                  <div class="config-row">
+                    <div class="config-field">
+                      <label for="var-invoice-month">Month</label>
+                      <select id="var-invoice-month">
+                        <option value="">Select...</option>
+                        <option value="January">January</option>
+                        <option value="February">February</option>
+                        <option value="March">March</option>
+                        <option value="April">April</option>
+                        <option value="May">May</option>
+                        <option value="June">June</option>
+                        <option value="July">July</option>
+                        <option value="August">August</option>
+                        <option value="September">September</option>
+                        <option value="October">October</option>
+                        <option value="November">November</option>
+                        <option value="December">December</option>
+                      </select>
+                    </div>
+                    <div class="config-field">
+                      <label for="var-invoice-year">Year</label>
+                      <input type="text" id="var-invoice-year" placeholder="2026">
+                    </div>
+                  </div>
                 </div>
-                <label for="payload-instruction" class="sr-only">Agent Operating Procedure</label>
-                <textarea id="payload-instruction" placeholder="Enter the agent operating procedure..."></textarea>
-              </div>
-            </div>
 
-            <!-- Advanced Settings (Inline Collapsible) -->
-            <div class="advanced-settings" id="advanced-settings">
+                <!-- Advanced Settings -->
+                <div class="advanced-settings" id="advanced-settings">
               <button type="button" class="advanced-settings-toggle" id="advanced-settings-toggle">
                 <svg class="advanced-settings-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
-                Advanced Settings
+                Advanced
               </button>
               <div class="advanced-settings-content" id="advanced-settings-content">
-                <!-- Models -->
-                <div class="settings-group">
-                  <h4>Models</h4>
+                <div class="settings-grid">
                   <div class="config-field">
-                    <label for="agent-model">Navigation (CUA)</label>
+                    <label for="agent-model">Navigation Model</label>
                     <select id="agent-model">
-                      <option value="">Gemini 2.5 Computer Use (Default)</option>
+                      <option value="">Gemini 2.5 CU (Default)</option>
                       <optgroup label="Other Models" class="driver-only">
                         <option value="anthropic/claude-sonnet-4-20250514">Claude Sonnet 4</option>
                         <option value="anthropic/claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
@@ -207,7 +204,7 @@
                     </select>
                   </div>
                   <div class="config-field driver-only">
-                    <label for="stagehand-model">DOM Operations (Stagehand)</label>
+                    <label for="stagehand-model">DOM Model</label>
                     <select id="stagehand-model">
                       <option value="">Claude Sonnet 4.5 (Default)</option>
                       <optgroup label="Anthropic">
@@ -230,39 +227,18 @@
                       </optgroup>
                     </select>
                   </div>
-                </div>
-
-                <!-- Custom URL -->
-                <div class="settings-group">
-                  <h4>Custom URL</h4>
-                  <div class="config-field">
-                    <label for="payload-url">Target URL</label>
-                    <input type="url" id="payload-url" placeholder="Auto-filled from carrier">
-                    <span class="field-hint">Override the carrier's default URL</span>
-                  </div>
-                </div>
-
-                <!-- Limits -->
-                <div class="settings-group">
-                  <h4>Limits</h4>
                   <div class="config-field">
                     <label for="max-steps">Max Steps</label>
                     <input type="number" id="max-steps" placeholder="50" min="10" max="200">
-                    <span class="field-hint">Agent action limit (10-200)</span>
                   </div>
-                </div>
-
-                <!-- Network -->
-                <div class="settings-group">
-                  <h4>Network</h4>
                   <div class="config-field">
                     <label for="proxy-type">Proxy</label>
                     <select id="proxy-type">
-                      <option value="">None (direct connection)</option>
-                      <option value="mobile">Mobile (Best for bot detection)</option>
+                      <option value="">None (direct)</option>
+                      <option value="mobile">Mobile</option>
                       <option value="residential">Residential</option>
                       <option value="isp">ISP</option>
-                      <option value="datacenter">Datacenter (Fastest)</option>
+                      <option value="datacenter">Datacenter</option>
                     </select>
                   </div>
                   <div class="config-field" id="proxy-country-group" style="display: none;">
@@ -284,41 +260,38 @@
                   <div class="config-field driver-only">
                     <label for="profile-name">Session Profile</label>
                     <input type="text" id="profile-name" placeholder="e.g., rippling-session">
-                    <span class="field-hint">Reuse cookies/session across runs</span>
                   </div>
                 </div>
-
                 <!-- Credentials -->
-                <div class="settings-group driver-only" id="credentials-section">
-                  <h4>Credentials</h4>
-                  <p class="settings-group-description">Override stored credentials for this run</p>
-                  <div class="config-field">
-                    <label for="var-username">Username</label>
-                    <input type="text" id="var-username" placeholder="Leave empty to use stored">
+                <div class="settings-credentials driver-only" id="credentials-section">
+                  <div class="settings-grid">
+                    <div class="config-field">
+                      <label for="var-username">Username</label>
+                      <input type="text" id="var-username" placeholder="Use stored">
+                    </div>
+                    <div class="config-field">
+                      <label for="var-password">Password</label>
+                      <input type="password" id="var-password" placeholder="Use stored">
+                    </div>
+                    <div class="config-field">
+                      <label for="var-totp-secret">TOTP Secret</label>
+                      <input type="password" id="var-totp-secret" placeholder="Use stored">
+                    </div>
+                    <div class="config-field">
+                      <label>&nbsp;</label>
+                      <button type="button" class="btn btn-sm" id="clear-credentials-btn" style="width: 100%;">
+                        Clear Stored
+                      </button>
+                    </div>
                   </div>
-                  <div class="config-field">
-                    <label for="var-password">Password</label>
-                    <input type="password" id="var-password" placeholder="Leave empty to use stored">
-                  </div>
-                  <div class="config-field">
-                    <label for="var-totp-secret">TOTP Secret</label>
-                    <input type="password" id="var-totp-secret" placeholder="Leave empty to use stored">
-                  </div>
-                  <button type="button" class="btn btn-sm" id="clear-credentials-btn">
-                    Clear Stored Credentials
-                  </button>
                 </div>
               </div>
-            </div>
-
-            <!-- Secondary Actions -->
-            <div class="task-actions-secondary">
-              <button class="btn" id="update-btn" disabled>Save</button>
-              <button class="btn" id="save-btn" disabled>Save as...</button>
-            </div>
-          </div>
-        </div>
-      </div>
+            </div>  <!-- /advanced-settings -->
+              </div>  <!-- /task-body-sidebar -->
+            </div>  <!-- /task-body -->
+          </div>  <!-- /task-config-form -->
+        </div>  <!-- /task-config -->
+      </div>  <!-- /tab-content-editor -->
 
       <!-- Live View Tab -->
       <div class="tab-content" id="tab-content-live-view">
@@ -459,28 +432,59 @@
               </svg>
               Back
             </button>
-            <h3 id="history-detail-title">Session Details</h3>
           </div>
+
           <div class="history-detail-content">
-            <div class="history-detail-actions">
-              <a href="#" class="btn" id="history-download-video">Show Recording</a>
-              <a href="#" class="btn" id="history-view-online" target="_blank" title="Recording expires after 30 days">View Online</a>
-              <button class="btn" id="history-view-log">View Log</button>
+            <!-- 1. Status Hero Card -->
+            <div class="run-status-card" id="run-status-card">
+              <div class="run-status-indicator" id="run-status-indicator">
+                <span class="run-status-dot"></span>
+                <span class="run-status-label" id="run-status-label"></span>
+              </div>
+              <h2 class="run-title" id="run-title"></h2>
+              <div class="run-meta" id="run-meta"></div>
+              <p class="run-message" id="run-message"></p>
+              <div class="run-actions" id="run-actions"></div>
             </div>
-            <div class="history-video-container" style="display: none;">
-              <video id="history-video" controls>
-                Your browser does not support the video tag.
-              </video>
-              <div class="history-video-actions">
-                <a href="#" class="btn btn-sm" id="history-download-recording-link" download>Download Recording</a>
+
+            <!-- 2. Files Section -->
+            <div class="run-section" id="run-files-section" style="display: none;">
+              <div class="run-section-header">
+                <h4>Files</h4>
+                <span class="run-section-count" id="run-files-count"></span>
+              </div>
+              <div class="run-files-list" id="run-files-list"></div>
+            </div>
+
+            <!-- 3. Recording Section -->
+            <div class="run-section" id="run-recording-section">
+              <div class="run-section-header">
+                <h4>Recording</h4>
+              </div>
+              <div class="run-recording-content" id="run-recording-content" style="display: none;">
+                <video id="history-video" controls></video>
+                <div class="run-recording-actions">
+                  <a href="#" class="btn btn-sm" id="history-download-recording-link" download>Download Recording</a>
+                </div>
+              </div>
+              <div class="run-recording-empty" id="run-recording-empty">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                </svg>
+                <p>No recording available</p>
               </div>
             </div>
-            <div class="history-log-container" id="history-log-container" style="display: none;">
-              <div class="history-log-header">
-                <h4>Session Log</h4>
+
+            <!-- 4. Log Section -->
+            <div class="run-section" id="run-log-section">
+              <div class="run-section-header">
+                <h4>Log</h4>
                 <button class="btn btn-sm" id="history-copy-log-btn">Copy</button>
               </div>
-              <pre class="history-log" id="history-log"></pre>
+              <pre class="run-log-preview" id="run-log-preview"></pre>
+              <button class="btn btn-sm btn-ghost" id="run-log-expand-btn">Show Full Log</button>
+              <pre class="run-log-full" id="run-log-full" style="display: none;"></pre>
             </div>
           </div>
         </div>

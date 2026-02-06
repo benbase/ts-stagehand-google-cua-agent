@@ -53,6 +53,19 @@ app.action<NavigatorTaskInput, NavigatorTaskOutput>(
       throw new Error('url and instruction are required');
     }
 
+    // Auto-compute invoiceMonthNumber from invoiceMonth (e.g. "January" → "01")
+    const monthMap: Record<string, string> = {
+      january: '01', february: '02', march: '03', april: '04',
+      may: '05', june: '06', july: '07', august: '08',
+      september: '09', october: '10', november: '11', december: '12',
+    };
+    if (variables.invoiceMonth && !variables.invoiceMonthNumber) {
+      const num = monthMap[variables.invoiceMonth.toLowerCase()];
+      if (num) {
+        variables.invoiceMonthNumber = num;
+      }
+    }
+
     // Substitute non-sensitive variables in instruction (exclude credentials)
     const sensitiveKeys = ['username', 'password', 'totpSecret'];
     let resolvedInstruction = instruction;

@@ -15,7 +15,6 @@ class App {
     this.masterPrompt = null;
     this.usesMasterPrompt = true;
     this.clearCredentialsFlag = false;
-    this.instructionsExpanded = false;
 
     this.el = {
       mainContent: document.getElementById('main-content'),
@@ -28,6 +27,7 @@ class App {
       // Task config form
       taskConfigEmpty: document.getElementById('task-config-empty'),
       taskConfigForm: document.getElementById('task-config-form'),
+      taskHeaderTitle: document.getElementById('task-header-title'),
 
       // Config fields
       payloadUrl: document.getElementById('payload-url'),
@@ -58,14 +58,9 @@ class App {
       profileName: document.getElementById('profile-name'),
 
       // Instructions
-      instructionsPreview: document.getElementById('instructions-preview'),
-      instructionsPreviewContent: document.getElementById('instructions-preview-content'),
-      instructionsCustomizeBtn: document.getElementById('instructions-customize-btn'),
-      instructionsEditor: document.getElementById('instructions-editor'),
       instructionsStatus: document.getElementById('instructions-status'),
       instructionsStatusText: document.getElementById('instructions-status-text'),
       instructionsResetBtn: document.getElementById('instructions-reset-btn'),
-      instructionsCollapseBtn: document.getElementById('instructions-collapse-btn'),
 
       // Advanced settings (inline)
       advancedSettings: document.getElementById('advanced-settings'),
@@ -136,16 +131,27 @@ class App {
       historyList: document.getElementById('history-list'),
       refreshHistoryBtn: document.getElementById('refresh-history-btn'),
       historyDetail: document.getElementById('history-detail'),
-      historyDetailTitle: document.getElementById('history-detail-title'),
       historyBackBtn: document.getElementById('history-back-btn'),
       historyVideo: document.getElementById('history-video'),
-      historyDownloadVideo: document.getElementById('history-download-video'),
       historyDownloadRecordingLink: document.getElementById('history-download-recording-link'),
-      historyViewOnline: document.getElementById('history-view-online'),
-      historyViewLog: document.getElementById('history-view-log'),
-      historyLogContainer: document.getElementById('history-log-container'),
-      historyLog: document.getElementById('history-log'),
       historyCopyLogBtn: document.getElementById('history-copy-log-btn'),
+      // New detail view elements
+      runStatusCard: document.getElementById('run-status-card'),
+      runStatusLabel: document.getElementById('run-status-label'),
+      runTitle: document.getElementById('run-title'),
+      runMeta: document.getElementById('run-meta'),
+      runMessage: document.getElementById('run-message'),
+      runActions: document.getElementById('run-actions'),
+      runFilesSection: document.getElementById('run-files-section'),
+      runFilesCount: document.getElementById('run-files-count'),
+      runFilesList: document.getElementById('run-files-list'),
+      runRecordingSection: document.getElementById('run-recording-section'),
+      runRecordingContent: document.getElementById('run-recording-content'),
+      runRecordingEmpty: document.getElementById('run-recording-empty'),
+      runLogSection: document.getElementById('run-log-section'),
+      runLogPreview: document.getElementById('run-log-preview'),
+      runLogFull: document.getElementById('run-log-full'),
+      runLogExpandBtn: document.getElementById('run-log-expand-btn'),
     };
 
     this.init();
@@ -191,13 +197,6 @@ class App {
       this.el.instructionsStatusText.textContent = 'Custom';
       this.el.instructionsResetBtn.style.display = 'block';
     }
-
-    // Update preview content
-    const instruction = this.el.payloadInstruction.value || this.masterPrompt || '';
-    const preview = instruction.substring(0, 200) + (instruction.length > 200 ? '...' : '');
-    this.el.instructionsPreviewContent.textContent = matchesMaster
-      ? 'Using default AOP...'
-      : preview || 'No AOP configured';
   }
 
   resetToMasterPrompt() {
@@ -205,20 +204,6 @@ class App {
       this.el.payloadInstruction.value = this.masterPrompt;
       this.updateInstructionsStatus();
     }
-  }
-
-  expandInstructions() {
-    this.instructionsExpanded = true;
-    this.el.instructionsPreview.style.display = 'none';
-    this.el.instructionsEditor.style.display = 'block';
-    this.el.payloadInstruction.focus();
-  }
-
-  collapseInstructions() {
-    this.instructionsExpanded = false;
-    this.el.instructionsPreview.style.display = 'block';
-    this.el.instructionsEditor.style.display = 'none';
-    this.updateInstructionsStatus();
   }
 
   // Carriers
@@ -453,7 +438,7 @@ class App {
 
       // Show config form, hide empty state
       this.el.taskConfigEmpty.style.display = 'none';
-      this.el.taskConfigForm.style.display = 'block';
+      this.el.taskConfigForm.style.display = 'flex';
 
       // Handle markdown files (shouldn't happen since we filter them out)
       if (payload.type === 'markdown') {
@@ -508,12 +493,13 @@ class App {
         item.classList.toggle('active', item.dataset.name === name);
       });
 
-      // Update action bar
-      this.el.actionBarTask.textContent = name.replace(/\.json$/, '').replace(/_/g, ' ');
+      // Update task header and action bar
+      const displayName = name.replace(/\.json$/, '').replace(/_/g, ' ');
+      this.el.taskHeaderTitle.textContent = displayName;
+      this.el.actionBarTask.textContent = displayName;
       this.el.actionBarStatus.textContent = '';
 
       // Update instructions UI
-      this.collapseInstructions();
       this.updateInstructionsStatus();
       this.collapseAdvancedSettings();
 
@@ -533,7 +519,7 @@ class App {
 
     // Show config form
     this.el.taskConfigEmpty.style.display = 'none';
-    this.el.taskConfigForm.style.display = 'block';
+    this.el.taskConfigForm.style.display = 'flex';
 
     // Reset all fields
     this.el.payloadUrl.value = '';
@@ -559,12 +545,12 @@ class App {
     // Clear selection
     document.querySelectorAll('#payload-list .task-item').forEach(item => item.classList.remove('active'));
 
-    // Update action bar
+    // Update task header and action bar
+    this.el.taskHeaderTitle.textContent = 'New Task';
     this.el.actionBarTask.textContent = 'New task';
     this.el.actionBarStatus.textContent = 'Unsaved';
 
     // Update instructions and settings
-    this.collapseInstructions();
     this.updateInstructionsStatus();
     this.collapseAdvancedSettings();
 
@@ -959,7 +945,13 @@ class App {
       this.el.updateBtn.classList.add('btn-success');
       this.setStatus('success', 'Saved');
 
-      await this.selectPayload(this.selectedPayload);
+      // Refresh internal payload reference without reloading the form
+      try {
+        const refreshRes = await fetch(`/api/payloads/${encodeURIComponent(this.selectedPayload)}?app=${this.getSelectedApp()}`);
+        if (refreshRes.ok) {
+          this.originalPayload = await refreshRes.json();
+        }
+      } catch { /* keep existing reference */ }
 
       setTimeout(() => {
         this.el.updateBtn.textContent = originalText;
@@ -1098,6 +1090,22 @@ class App {
   }
 
   // History
+  getStatusInfo(session) {
+    const isSuccess = session.exitCode === 0 && session.result?.status !== 'error' && session.result?.status !== 'login_failed';
+    if (isSuccess && session.result?.status === 'success') {
+      return { label: 'Completed Successfully', cssClass: 'success' };
+    } else if (isSuccess) {
+      return { label: 'Completed', cssClass: 'success' };
+    } else {
+      return { label: 'Failed', cssClass: 'error' };
+    }
+  }
+
+  getResultMessage(session) {
+    if (!session.result) return '';
+    return session.result.message || session.result.reason || '';
+  }
+
   async loadHistory() {
     const container = this.el.historyList;
     const app = this.getSelectedApp();
@@ -1111,41 +1119,54 @@ class App {
       const sessions = await res.json();
 
       if (!sessions.length) {
-        container.innerHTML = `<div class="empty-history"><div class="empty-history-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg></div><h4>No recordings yet</h4><p>Session recordings will appear here</p></div>`;
+        container.innerHTML = `<div class="empty-history"><div class="empty-history-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg></div><h4>No sessions yet</h4><p>Run history will appear here after tasks complete</p></div>`;
         return;
       }
 
-      container.innerHTML = sessions.map(session => `
-        <div class="history-item" data-session-id="${session.id}" data-app="${app}">
-          <div class="history-item-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="23 7 16 12 23 17 23 7"></polygon>
-              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+      container.innerHTML = sessions.map(session => {
+        const status = this.getStatusInfo(session);
+        const message = this.getResultMessage(session);
+        return `
+          <div class="history-item ${status.cssClass === 'success' ? 'has-success' : 'has-error'}" data-session-id="${session.id}" data-app="${app}">
+            <div class="history-item-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+              </svg>
+            </div>
+            <div class="history-item-info">
+              <div class="history-item-title">${session.payloadName?.replace('.json', '') || 'Unknown'}</div>
+              <div class="history-item-meta">
+                <span>${this.formatDate(session.timestamp)}</span>
+                <span class="history-item-status ${status.cssClass}">
+                  ${status.cssClass === 'success' ? '✓ Success' : '✗ Failed'}
+                </span>
+                ${session.files?.length ? `<span class="history-item-files">${session.files.length} file${session.files.length > 1 ? 's' : ''}</span>` : ''}
+              </div>
+              ${message ? `<div class="history-item-result">${this.escapeHtml(message)}</div>` : ''}
+            </div>
+            <svg class="history-item-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
           </div>
-          <div class="history-item-info">
-            <div class="history-item-title">${session.payloadName?.replace('.json', '') || 'Unknown'}</div>
-            <div class="history-item-meta">
-              <span>${this.formatDate(session.timestamp)}</span>
-              <span class="history-item-status ${session.exitCode === 0 ? 'success' : 'error'}">
-                ${session.exitCode === 0 ? '✓ Success' : '✗ Failed'}
-              </span>
-              ${session.files?.length ? `<span class="history-item-files">${session.files.length} file${session.files.length > 1 ? 's' : ''}</span>` : ''}
-            </div>
-          </div>
-          <svg class="history-item-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="9 18 15 12 9 6"></polyline>
-          </svg>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     } catch (e) {
       container.innerHTML = `<div class="empty-history"><h4>Error loading history</h4></div>`;
     }
   }
 
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   async viewHistoryDetail(sessionId, app) {
     const appName = app || this.getSelectedApp();
     this.currentHistoryApp = appName;
+    this.currentHistorySessionId = sessionId;
+
     try {
       const res = await fetch(`/api/sessions/${sessionId}?app=${appName}`);
       const session = await res.json();
@@ -1153,118 +1174,129 @@ class App {
       document.querySelector('.history-container').style.display = 'none';
       this.el.historyDetail.style.display = 'flex';
 
-      this.el.historyDetailTitle.textContent = session.payloadName?.replace('.json', '') || 'Session Details';
-      this.renderSessionFiles(sessionId, session.files || [], appName);
+      // 1. Status Hero Card
+      const status = this.getStatusInfo(session);
+      const message = this.getResultMessage(session);
 
-      this.el.historyVideo.src = '';
-      this.el.historyVideo.style.display = 'none';
-      document.querySelector('.history-video-container').style.display = 'none';
-      this.currentSessionHasRecording = session.hasRecording;
-      this.currentSessionRecordingUrl = session.hasRecording ? `/api/sessions/${sessionId}/recording?app=${appName}` : null;
+      this.el.runStatusCard.className = `run-status-card ${status.cssClass}`;
+      this.el.runStatusLabel.textContent = status.label;
+      this.el.runTitle.textContent = session.payloadName?.replace('.json', '') || 'Session';
+      this.el.runMeta.innerHTML = `
+        <span>${this.formatDate(session.timestamp)}</span>
+        <span class="run-meta-separator">·</span>
+        <span class="run-app-badge">${appName}</span>
+      `;
+      this.el.runMessage.textContent = message;
 
-      if (session.hasRecording) {
-        this.el.historyDownloadVideo.href = `/api/sessions/${sessionId}/recording?app=${appName}`;
-        this.el.historyDownloadVideo.download = `recording_${sessionId}.mp4`;
-        this.el.historyDownloadVideo.textContent = 'Show Recording';
-        this.el.historyDownloadVideo.style.display = 'inline-flex';
-        this.recordingVisible = false;
-      } else {
-        this.el.historyDownloadVideo.style.display = 'none';
-      }
-
+      // View Online button
       if (session.replayViewUrl) {
-        this.el.historyViewOnline.href = session.replayViewUrl;
-        this.el.historyViewOnline.style.display = 'inline-flex';
+        this.el.runActions.innerHTML = `
+          <a href="${session.replayViewUrl}" target="_blank" class="btn btn-sm" title="View replay online (expires after 30 days)">
+            View Online
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 4px;">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+          </a>
+        `;
       } else {
-        this.el.historyViewOnline.style.display = 'none';
+        this.el.runActions.innerHTML = '';
       }
 
-      this.el.historyLogContainer.style.display = 'none';
-      this.el.historyLog.textContent = '';
-      this.currentHistorySessionId = sessionId;
+      // 2. Files Section
+      const files = session.files || [];
+      if (files.length) {
+        this.el.runFilesSection.style.display = 'flex';
+        this.el.runFilesCount.textContent = files.length;
+        this.el.runFilesList.innerHTML = files.map(file => {
+          const isPdf = file.filename.toLowerCase().endsWith('.pdf');
+          return `
+            <div class="run-file-item">
+              <div class="run-file-icon">
+                ${isPdf
+                  ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>`
+                  : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`
+                }
+              </div>
+              <div class="run-file-info">
+                <div class="run-file-name">${this.escapeHtml(file.filename)}</div>
+                <div class="run-file-size">${this.formatSize(file.size)}</div>
+              </div>
+              <div class="run-file-actions">
+                <a href="/api/sessions/${sessionId}/files/${encodeURIComponent(file.filename)}?app=${appName}&view=true" target="_blank" class="btn btn-sm">View</a>
+                <a href="/api/sessions/${sessionId}/files/${encodeURIComponent(file.filename)}?app=${appName}" class="btn btn-sm" download>Download</a>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        this.el.runFilesSection.style.display = 'none';
+      }
+
+      // 3. Recording Section
+      this.el.historyVideo.pause();
+      this.el.historyVideo.src = '';
+      if (session.hasRecording) {
+        const recordingUrl = `/api/sessions/${sessionId}/recording?app=${appName}`;
+        this.el.runRecordingContent.style.display = 'block';
+        this.el.runRecordingEmpty.style.display = 'none';
+        this.el.historyVideo.src = recordingUrl;
+        this.el.historyDownloadRecordingLink.href = recordingUrl;
+        this.el.historyDownloadRecordingLink.download = `recording_${sessionId}.mp4`;
+      } else {
+        this.el.runRecordingContent.style.display = 'none';
+        this.el.runRecordingEmpty.style.display = 'flex';
+      }
+
+      // 4. Log Section — auto-fetch and show preview
+      this.el.runLogPreview.textContent = '';
+      this.el.runLogFull.textContent = '';
+      this.el.runLogFull.style.display = 'none';
+      this.el.runLogPreview.style.display = 'block';
+      this.el.runLogExpandBtn.style.display = 'inline-flex';
+      this.el.runLogExpandBtn.textContent = 'Show Full Log';
+      this.currentFullLog = '';
+
+      try {
+        const logRes = await fetch(`/api/sessions/${sessionId}/log?app=${appName}`);
+        const log = this.stripAnsi(await logRes.text());
+        this.currentFullLog = log;
+
+        // Show last 8 lines as preview
+        const lines = log.split('\n');
+        const previewLines = lines.slice(-8).join('\n');
+        this.el.runLogPreview.textContent = previewLines;
+
+        if (lines.length <= 8) {
+          this.el.runLogExpandBtn.style.display = 'none';
+          // Remove fade gradient for short logs
+          this.el.runLogPreview.style.maxHeight = 'none';
+        }
+      } catch (e) {
+        this.el.runLogPreview.textContent = 'Failed to load log';
+        this.el.runLogExpandBtn.style.display = 'none';
+      }
     } catch (e) {
       this.setStatus('error', 'Failed to load session');
     }
   }
 
-  toggleRecording(e) {
-    e.preventDefault();
-    const videoContainer = document.querySelector('.history-video-container');
-
-    if (this.recordingVisible) {
-      this.el.historyVideo.pause();
-      this.el.historyVideo.src = '';
-      this.el.historyVideo.style.display = 'none';
-      videoContainer.style.display = 'none';
-      this.el.historyDownloadVideo.textContent = 'Show Recording';
-      this.recordingVisible = false;
+  toggleLogExpand() {
+    if (this.el.runLogFull.style.display === 'none') {
+      this.el.runLogFull.textContent = this.currentFullLog;
+      this.el.runLogFull.style.display = 'block';
+      this.el.runLogPreview.style.display = 'none';
+      this.el.runLogExpandBtn.textContent = 'Collapse Log';
     } else {
-      this.el.historyVideo.src = this.currentSessionRecordingUrl;
-      this.el.historyVideo.style.display = 'block';
-      videoContainer.style.display = 'block';
-      this.el.historyDownloadVideo.textContent = 'Hide Recording';
-      this.el.historyDownloadRecordingLink.href = this.currentSessionRecordingUrl;
-      this.recordingVisible = true;
-    }
-  }
-
-  renderSessionFiles(sessionId, files, app) {
-    const appName = app || this.currentHistoryApp || this.getSelectedApp();
-    let container = document.getElementById('history-files-container');
-    if (!container) {
-      container = document.createElement('div');
-      container.id = 'history-files-container';
-      container.className = 'history-files-container';
-      const detailContent = document.querySelector('.history-detail-content');
-      detailContent.insertBefore(container, detailContent.firstChild);
-    }
-
-    if (!files.length) {
-      container.innerHTML = '';
-      container.style.display = 'none';
-      return;
-    }
-
-    container.style.display = 'block';
-    container.innerHTML = `
-      <h4>Downloaded Files</h4>
-      <div class="history-files-list">
-        ${files.map(file => `
-          <div class="history-file-item">
-            <div class="history-file-icon">${this.getFileIcon(file.filename)}</div>
-            <div class="history-file-info">
-              <div class="history-file-name">${file.filename}</div>
-              <div class="history-file-size">${this.formatSize(file.size)}</div>
-            </div>
-            <div class="history-file-actions">
-              <a href="/api/sessions/${sessionId}/files/${encodeURIComponent(file.filename)}?app=${appName}" class="btn btn-sm" download>Download</a>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    `;
-  }
-
-  async toggleHistoryLog() {
-    if (this.el.historyLogContainer.style.display === 'none') {
-      try {
-        const app = this.currentHistoryApp || this.getSelectedApp();
-        const res = await fetch(`/api/sessions/${this.currentHistorySessionId}/log?app=${app}`);
-        const log = await res.text();
-        this.el.historyLog.textContent = this.stripAnsi(log);
-        this.el.historyLogContainer.style.display = 'block';
-        this.el.historyViewLog.textContent = 'Hide Log';
-      } catch (e) {
-        this.setStatus('error', 'Failed to load log');
-      }
-    } else {
-      this.el.historyLogContainer.style.display = 'none';
-      this.el.historyViewLog.textContent = 'View Log';
+      this.el.runLogFull.style.display = 'none';
+      this.el.runLogPreview.style.display = 'block';
+      this.el.runLogExpandBtn.textContent = 'Show Full Log';
     }
   }
 
   async copyHistoryLog() {
-    const text = this.el.historyLog.textContent;
+    const text = this.currentFullLog || this.el.runLogPreview.textContent;
     if (!text) return;
 
     try {
@@ -1302,8 +1334,6 @@ class App {
     });
 
     // Instructions
-    this.el.instructionsCustomizeBtn.addEventListener('click', () => this.expandInstructions());
-    this.el.instructionsCollapseBtn.addEventListener('click', () => this.collapseInstructions());
     this.el.instructionsResetBtn.addEventListener('click', () => this.resetToMasterPrompt());
     this.el.payloadInstruction.addEventListener('input', () => this.updateInstructionsStatus());
 
@@ -1337,9 +1367,8 @@ class App {
     // History
     this.el.refreshHistoryBtn.addEventListener('click', () => this.loadHistory());
     this.el.historyBackBtn.addEventListener('click', () => this.hideHistoryDetail());
-    this.el.historyDownloadVideo.addEventListener('click', (e) => this.toggleRecording(e));
-    this.el.historyViewLog.addEventListener('click', () => this.toggleHistoryLog());
     this.el.historyCopyLogBtn.addEventListener('click', () => this.copyHistoryLog());
+    this.el.runLogExpandBtn.addEventListener('click', () => this.toggleLogExpand());
     this.el.historyList.addEventListener('click', (e) => {
       const item = e.target.closest('.history-item');
       if (item?.dataset.sessionId) this.viewHistoryDetail(item.dataset.sessionId, item.dataset.app);
