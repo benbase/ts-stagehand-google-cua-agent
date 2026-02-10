@@ -1,0 +1,11 @@
+{
+  "instruction": "# Download Invoice\n\nYou are at %url% for carrier **%carrier%**.\n\n## Task\n\n1. Locate the group client **%clientName%** (Group Number: **%groupNumber%**)\n2. Find and download the invoice for **%invoiceMonth% %invoiceYear%** (month number: **%invoiceMonthNumber%**, year: **%invoiceYear%**). Match any invoice where the month is %invoiceMonthNumber% and year is %invoiceYear% — ignore the day.\n\n---\n\n## Best Practices\n\n- The invoice is in the Report > Billing. To be able to click one needs to move to the first item on the submenu, then move down to the Billing and click.\n- The Report Type we want is \"Billing Detail\".\n- The invoice date is in the statements at the bottom.\n- The Results Format we want is \"PDF\". To edit this and to generate the report, we need to go to the top right of that page by scrolling to the right and/or right and up on that invoices page.\n\n---\n\n## Notes\n\n- If the exact invoice date is not available, report `download_failed` with the dates that ARE available\n- Always verify the downloaded document matches the requested date before reporting success\n- If login fails, report `login_failed` with the specific error message\n- If the group is not found, report `group_not_found` with the group number you searched for\n",
+  "maxSteps": 60,
+  "variables": {
+    "carrier": "Cigna Medical",
+    "groupNumber": "00652240",
+    "clientName": "",
+    "invoiceMonth": "January",
+    "invoiceYear": "2026"
+  }
+}

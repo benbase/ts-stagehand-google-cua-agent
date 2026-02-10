@@ -1,15 +1,11 @@
-# Download Invoice
+# Goal
 
 You are at %url% for carrier **%carrier%**.
-
-## Task
 
 1. Locate the group client **%clientName%** (Group Number: **%groupNumber%**)
 2. Find and download the invoice for **%invoiceMonth% %invoiceYear%** (month number: **%invoiceMonthNumber%**, year: **%invoiceYear%**). Match any invoice where the month is %invoiceMonthNumber% and year is %invoiceYear% — ignore the day.
 
----
-
-## Best Practices
+# Best Practices
 
 ### Kaiser Permanente
 
@@ -38,11 +34,15 @@ You are at %url% for carrier **%carrier%**.
 - May need to select the correct pay period/billing cycle
 - Documents section contains downloadable invoices
 
----
+# Deliverable
 
-## Notes
+A downloaded invoice PDF matching the requested group and date.
 
-- If the exact invoice date is not available, report `download_failed` with the dates that ARE available
 - Always verify the downloaded document matches the requested date before reporting success
-- If login fails, report `login_failed` with the specific error message
-- If the group is not found, report `group_not_found` with the group number you searched for
+
+# Common Errors
+
+- The exact invoice date is not available
+- The downloaded document doesn't match the requested date
+- The login fails
+- The group is not found

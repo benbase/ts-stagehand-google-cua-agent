@@ -1,0 +1,11 @@
+{
+  "instruction": "# Download Invoice\n\nYou are at %url% for carrier **%carrier%**.\n\n## Task\n\n1. Locate the group client **%clientName%** (Group Number: **%groupNumber%**)\n2. Find and download the invoice for **%invoiceMonth% %invoiceYear%** (month number: **%invoiceMonthNumber%**, year: **%invoiceYear%**). Match any invoice where the month is %invoiceMonthNumber% and year is %invoiceYear% — ignore the day.\n\n---\n\n## Best Practices\n\n- The invoices is in the Employer Connection of the Small Business (use the menu to reach there).\n- **If search returns an error, try again** - the search feature can be flaky\n\n---\n\n## Notes\n\n- If the exact invoice date is not available, report `download_failed` with the dates that ARE available\n- Always verify the downloaded document matches the requested date before reporting success\n- If login fails, report `login_failed` with the specific error message\n- If the group is not found, report `group_not_found` with the group number you searched for\n",
+  "maxSteps": 60,
+  "variables": {
+    "carrier": "BlueShield",
+    "groupNumber": "W0109310",
+    "clientName": "",
+    "invoiceMonth": "February",
+    "invoiceYear": "2026"
+  }
+}
