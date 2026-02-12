@@ -1,0 +1,7 @@
+{
+  "name": "navigator-stg",
+  "version": "1.0.0",
+  "description": "Navigator (staging environment)",
+  "type": "module",
+  "main": "index.ts"
+}

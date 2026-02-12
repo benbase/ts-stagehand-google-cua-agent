@@ -4,10 +4,17 @@ Multiple Kernel applications for intelligent browser automation. Each app uses a
 
 ## Apps
 
-| App | Approach | Best For |
-|-----|----------|----------|
-| **driver** | DOM-based via Stagehand | Complex forms, reliable element targeting |
-| **navigator** | Vision-based via Computer Controls | Visual apps, obfuscated DOMs |
+| App | Kernel Name | Approach | Purpose |
+|-----|-------------|----------|---------|
+| **navigator** | `navigator` | Vision-based via Computer Controls | Production |
+| **navigator-dev** | `navigator-DEV` | Vision-based via Computer Controls | Development (experiment here) |
+| **navigator-stg** | `navigator-STG` | Vision-based via Computer Controls | Staging (validate before prod) |
+| **driver** | `driver` | DOM-based via Stagehand | Complex forms, reliable element targeting |
+| **old** | `old` | DOM-based via Stagehand (legacy) | Original implementation |
+
+### Promotion workflow
+
+`navigator-dev` → `navigator-stg` → `navigator` (prod). Each is a full independent copy so changes can be validated at each stage before promotion.
 
 ## Project Structure
 
@@ -16,16 +23,11 @@ Multiple Kernel applications for intelligent browser automation. Each app uses a
 │   ├── package.json        # Workspace root
 │   ├── tsconfig.json       # TypeScript config
 │   ├── node_modules/       # Shared dependencies
+│   ├── navigator/          # Computer Controls API (production)
+│   ├── navigator-dev/      # Computer Controls API (dev, full copy)
+│   ├── navigator-stg/      # Computer Controls API (staging, full copy)
 │   ├── driver/             # Stagehand-based automation
-│   │   ├── index.ts
-│   │   ├── tools.ts
-│   │   ├── types.ts
-│   │   └── package.json
-│   └── navigator/          # Computer Controls API
-│       ├── index.ts
-│       ├── types.ts
-│       └── package.json
-├── payloads/               # Task configurations
+│   └── old/                # Legacy Stagehand
 ├── web/                    # Development UI (separate)
 │   ├── package.json
 │   └── node_modules/
@@ -50,27 +52,38 @@ cp .env-example .env
 ## Deploy
 
 ```bash
-./deploy.sh              # Deploy both apps
+./deploy.sh              # Deploy all prod apps (driver, navigator, old)
+./deploy.sh navigator    # Deploy only navigator (prod)
+./deploy.sh navigator-dev # Deploy only navigator DEV
+./deploy.sh navigator-stg # Deploy only navigator STG
 ./deploy.sh driver       # Deploy only driver
-./deploy.sh navigator    # Deploy only navigator
+./deploy.sh old          # Deploy only old
 ```
 
 ## Invoke
 
 ```bash
+# Navigator (prod)
+kernel invoke navigator navigate-task --payload '{"url": "https://example.com", "instruction": "..."}'
+
+# Navigator DEV
+kernel invoke navigator-DEV navigate-task --payload '{"url": "https://example.com", "instruction": "..."}'
+
+# Navigator STG
+kernel invoke navigator-STG navigate-task --payload '{"url": "https://example.com", "instruction": "..."}'
+
 # Driver
 kernel invoke driver download-task --payload-file payloads/kp_invoice_test.json
-
-# Navigator
-kernel invoke navigator navigate-task --payload '{"url": "https://example.com", "instruction": "..."}'
 ```
 
 ## Local Development
 
 ```bash
 # Run apps locally (from repo root)
-npx --prefix apps tsx apps/driver/index.ts
 npx --prefix apps tsx apps/navigator/index.ts
+npx --prefix apps tsx apps/navigator-dev/index.ts
+npx --prefix apps tsx apps/navigator-stg/index.ts
+npx --prefix apps tsx apps/driver/index.ts
 
 # Web UI
 cd web && node server.js
@@ -85,19 +98,18 @@ cd web && node server.js
 │              (URL, instructions, credentials)                       │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │
-            ┌───────────────┴───────────────┐
-            ▼                               ▼
-┌───────────────────────┐       ┌───────────────────────┐
-│       DRIVER          │       │      NAVIGATOR        │
-│   (Stagehand-based)   │       │  (Computer Controls)  │
-├───────────────────────┤       ├───────────────────────┤
-│ • DOM tree analysis   │       │ • Screenshot capture  │
-│ • Semantic actions    │       │ • Pixel coordinates   │
-│ • act() / extract()   │       │ • clickMouse()        │
-│ • Custom login tools  │       │ • typeText()          │
-└───────────┬───────────┘       └───────────┬───────────┘
-            │                               │
-            └───────────────┬───────────────┘
+    ┌───────────────┬───────┴───────┬───────────────┐
+    ▼               ▼               ▼               ▼
+┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────────────┐
+│ NAVIGATOR│ │NAV (DEV) │ │NAV (STG) │ │       DRIVER          │
+│  (prod)  │ │  (dev)   │ │ (staging)│ │   (Stagehand-based)   │
+├──────────┤ ├──────────┤ ├──────────┤ ├───────────────────────┤
+│ Computer │ │ Full     │ │ Full     │ │ • DOM tree analysis   │
+│ Controls │ │ copy of  │ │ copy of  │ │ • Semantic actions    │
+│ API      │ │ navigator│ │ navigator│ │ • act() / extract()   │
+└─────┬────┘ └────┬─────┘ └────┬─────┘ └───────────┬───────────┘
+      │           │            │                    │
+      └───────────┴────────────┴────────────────────┘
                             ▼
             ┌───────────────────────────────┐
             │     Kernel Browser Instance   │

@@ -1,8 +1,9 @@
 {
   "name": "Ease",
-  "url": "https://www.ease.com/login",
+  "url": "https://benbase.ease.com",
   "credentials": {
-    "username": "",
-    "password": ""
+    "username": "cari@benbase.com",
+    "password": "diMku2-bynpaw-paqmyj",
+    "totpSecret": "gvjfuz2wkbywkvtg"
   }
 }

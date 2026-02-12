@@ -1,0 +1,7 @@
+{
+  "name": "navigator-dev",
+  "version": "1.0.0",
+  "description": "Navigator (dev environment)",
+  "type": "module",
+  "main": "index.ts"
+}

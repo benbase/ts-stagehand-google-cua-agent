@@ -4,6 +4,8 @@
   "workspaces": [
     "driver",
     "navigator",
+    "navigator-dev",
+    "navigator-stg",
     "old"
   ],
   "devDependencies": {

@@ -1,0 +1,10 @@
+{
+  "maxSteps": 60,
+  "variables": {
+    "carrier": "Aetna",
+    "groupNumber": "",
+    "clientName": "",
+    "invoiceMonth": "",
+    "invoiceYear": ""
+  }
+}

@@ -564,6 +564,8 @@ async function loadMasterPrompt() {
 const APP_CONFIG = {
   driver: { appName: 'driver', action: 'download-task' },
   navigator: { appName: 'navigator', action: 'navigate-task' },
+  'navigator-dev': { appName: 'navigator-DEV', action: 'navigate-task' },
+  'navigator-stg': { appName: 'navigator-STG', action: 'navigate-task' },
   old: { appName: 'old', action: 'download-task' },
 };
 
@@ -573,7 +575,7 @@ app.post('/api/invoke', async (req, res) => {
 
   // Validate app selection
   if (!APP_CONFIG[app]) {
-    return res.status(400).json({ error: 'Invalid app. Must be "driver", "navigator", or "old"' });
+    return res.status(400).json({ error: 'Invalid app. Must be "driver", "navigator", "navigator-dev", "navigator-stg", or "old"' });
   }
 
   if (!payloadName || !isValidPayloadName(payloadName)) {
@@ -681,7 +683,7 @@ app.post('/api/invoke', async (req, res) => {
 
       // Apply model overrides
       if (agentModel) {
-        if (app === 'navigator') {
+        if (app === 'navigator' || app === 'navigator-dev' || app === 'navigator-stg') {
           // Navigator uses 'model' field for the Gemini model
           payload.model = agentModel;
         } else {

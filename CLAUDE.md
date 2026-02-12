@@ -10,13 +10,17 @@ Multiple Kernel applications for browser automation. Apps are managed via npm wo
 
 ```
 ├── apps/                   # Kernel apps (workspace root)
-│   ├── package.json        # Workspaces: driver, navigator, old
+│   ├── package.json        # Workspaces: driver, navigator, navigator-dev, navigator-stg, old
 │   ├── tsconfig.json       # TypeScript config
 │   ├── node_modules/       # Shared dependencies
 │   ├── driver/             # Stagehand-based (DOM automation)
 │   │   └── payloads/       # Driver-specific payloads
-│   ├── navigator/          # Computer Controls API (vision-based)
+│   ├── navigator/          # Computer Controls API (vision-based, production)
 │   │   └── payloads/       # Navigator-specific payloads
+│   ├── navigator-dev/      # Navigator (dev environment, full copy)
+│   │   └── payloads/       # Dev-specific payloads
+│   ├── navigator-stg/      # Navigator (staging environment, full copy)
+│   │   └── payloads/       # Staging-specific payloads
 │   ├── old/                # Legacy Stagehand implementation
 │   │   └── payloads/       # Old-specific payloads
 │   └── shared/
@@ -44,6 +48,19 @@ Uses Kernel's Computer Controls API:
 - Direct pixel coordinate clicking
 - No DOM awareness
 
+### `apps/navigator-dev/`
+**Kernel App:** `navigator-DEV` | **Action:** `navigate-task`
+
+Dev environment — full independent copy of navigator. Experiment here, then promote to stg.
+
+### `apps/navigator-stg/`
+**Kernel App:** `navigator-STG` | **Action:** `navigate-task`
+
+Staging environment — full independent copy of navigator. Promoted from dev, promote to prod.
+
+### Promotion workflow
+`navigator-DEV` → `navigator-STG` → `navigator` (prod). Each is a full copy so changes can be validated at each stage before promotion.
+
 ### `apps/old/`
 **Kernel App:** `old` | **Action:** `download-task`
 
@@ -62,18 +79,24 @@ cd apps && npm install
 cd web && npm install
 
 # Deploy
-./deploy.sh              # Both apps
+./deploy.sh              # All prod apps
 ./deploy.sh driver       # Driver only
 ./deploy.sh navigator    # Navigator only
+./deploy.sh navigator-dev # Navigator dev only
+./deploy.sh navigator-stg # Navigator staging only
 ./deploy.sh old          # Old only
 
 # Invoke
-kernel invoke driver download-task --payload-file payloads/example.json
 kernel invoke navigator navigate-task --payload '{"url": "...", "instruction": "..."}'
+kernel invoke navigator-DEV navigate-task --payload '{"url": "...", "instruction": "..."}'
+kernel invoke navigator-STG navigate-task --payload '{"url": "...", "instruction": "..."}'
+kernel invoke driver download-task --payload-file payloads/example.json
 
 # Local dev
-npx --prefix apps tsx apps/driver/index.ts
 npx --prefix apps tsx apps/navigator/index.ts
+npx --prefix apps tsx apps/navigator-dev/index.ts
+npx --prefix apps tsx apps/navigator-stg/index.ts
+npx --prefix apps tsx apps/driver/index.ts
 npx --prefix apps tsx apps/old/index.ts
 
 # Web UI
@@ -92,8 +115,10 @@ Required in root `.env`:
 Payloads are task configurations (JSON) or prompt templates (Markdown).
 
 **Locations:**
+- `apps/navigator/payloads/` - Navigator prod payloads
+- `apps/navigator-dev/payloads/` - Navigator DEV payloads
+- `apps/navigator-stg/payloads/` - Navigator STG payloads
 - `apps/driver/payloads/` - Driver-specific payloads
-- `apps/navigator/payloads/` - Navigator-specific payloads
 - `apps/old/payloads/` - Old-specific payloads
 - `apps/shared/payloads/` - Shared payloads (available to all apps via web UI)
 
@@ -109,6 +134,22 @@ Payloads are task configurations (JSON) or prompt templates (Markdown).
 - `web/` is separate, not part of workspaces
 - Kernel manages browser lifecycle
 - Computer Controls at `kernel.browsers.computer.*`
+
+## Making an app visible in the Playground
+
+To add or remove an app from the web UI, update these two places:
+
+1. **`web/public/index.html`** — Add/remove a `<button>` in the `.app-switcher` div:
+   ```html
+   <button class="app-switcher-btn" data-app="my-app" title="Description">Label</button>
+   ```
+   The `data-app` value must match the key in `APP_CONFIG` (step 2). Add `active` class to the default app.
+
+2. **`web/server.js`** — Add/remove an entry in the `APP_CONFIG` object:
+   ```js
+   'my-app': { appName: 'my-app', action: 'navigate-task' },
+   ```
+   This maps the app name to the Kernel app name and action used by `kernel invoke`.
 
 ## Documentation
 
