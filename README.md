@@ -9,8 +9,6 @@ Multiple Kernel applications for intelligent browser automation. Each app uses a
 | **navigator** | `navigator` | Vision-based via Computer Controls | Production |
 | **navigator-dev** | `navigator-DEV` | Vision-based via Computer Controls | Development (experiment here) |
 | **navigator-stg** | `navigator-STG` | Vision-based via Computer Controls | Staging (validate before prod) |
-| **driver** | `driver` | DOM-based via Stagehand | Complex forms, reliable element targeting |
-| **old** | `old` | DOM-based via Stagehand (legacy) | Original implementation |
 
 ### Promotion workflow
 
@@ -25,9 +23,7 @@ Multiple Kernel applications for intelligent browser automation. Each app uses a
 │   ├── node_modules/       # Shared dependencies
 │   ├── navigator/          # Computer Controls API (production)
 │   ├── navigator-dev/      # Computer Controls API (dev, full copy)
-│   ├── navigator-stg/      # Computer Controls API (staging, full copy)
-│   ├── driver/             # Stagehand-based automation
-│   └── old/                # Legacy Stagehand
+│   └── navigator-stg/      # Computer Controls API (staging, full copy)
 ├── web/                    # Development UI (separate)
 │   ├── package.json
 │   └── node_modules/
@@ -46,18 +42,16 @@ cd web && npm install
 
 # Configure environment
 cp .env-example .env
-# Add: KERNEL_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY
+# Add: KERNEL_API_KEY, GOOGLE_API_KEY
 ```
 
 ## Deploy
 
 ```bash
-./deploy.sh              # Deploy all prod apps (driver, navigator, old)
+./deploy.sh              # Deploy all prod apps
 ./deploy.sh navigator    # Deploy only navigator (prod)
 ./deploy.sh navigator-dev # Deploy only navigator DEV
 ./deploy.sh navigator-stg # Deploy only navigator STG
-./deploy.sh driver       # Deploy only driver
-./deploy.sh old          # Deploy only old
 ```
 
 ## Invoke
@@ -71,9 +65,6 @@ kernel invoke navigator-DEV navigate-task --payload '{"url": "https://example.co
 
 # Navigator STG
 kernel invoke navigator-STG navigate-task --payload '{"url": "https://example.com", "instruction": "..."}'
-
-# Driver
-kernel invoke driver download-task --payload-file payloads/kp_invoice_test.json
 ```
 
 ## Local Development
@@ -83,7 +74,6 @@ kernel invoke driver download-task --payload-file payloads/kp_invoice_test.json
 npx --prefix apps tsx apps/navigator/index.ts
 npx --prefix apps tsx apps/navigator-dev/index.ts
 npx --prefix apps tsx apps/navigator-stg/index.ts
-npx --prefix apps tsx apps/driver/index.ts
 
 # Web UI
 cd web && node server.js
@@ -92,37 +82,34 @@ cd web && node server.js
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Task Payload                                │
-│              (URL, instructions, credentials)                       │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │
-    ┌───────────────┬───────┴───────┬───────────────┐
-    ▼               ▼               ▼               ▼
-┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────────────┐
-│ NAVIGATOR│ │NAV (DEV) │ │NAV (STG) │ │       DRIVER          │
-│  (prod)  │ │  (dev)   │ │ (staging)│ │   (Stagehand-based)   │
-├──────────┤ ├──────────┤ ├──────────┤ ├───────────────────────┤
-│ Computer │ │ Full     │ │ Full     │ │ • DOM tree analysis   │
-│ Controls │ │ copy of  │ │ copy of  │ │ • Semantic actions    │
-│ API      │ │ navigator│ │ navigator│ │ • act() / extract()   │
-└─────┬────┘ └────┬─────┘ └────┬─────┘ └───────────┬───────────┘
-      │           │            │                    │
-      └───────────┴────────────┴────────────────────┘
-                            ▼
-            ┌───────────────────────────────┐
-            │     Kernel Browser Instance   │
-            │  • Remote Chromium browser    │
-            │  • Stealth, proxies, profiles │
-            └───────────────────────────────┘
+```mermaid
+flowchart TD
+    P["Task Payload<br/>URL · Instructions · Credentials"]
+
+    P -->|invoke| NAV["navigator<br/><i>production</i>"]
+    P -->|invoke| DEV["navigator-DEV<br/><i>development</i>"]
+    P -->|invoke| STG["navigator-STG<br/><i>staging</i>"]
+
+    NAV --> GEM["Gemini Computer Use<br/>Screenshot → Reason → Act"]
+    DEV --> GEM
+    STG --> GEM
+
+    GEM -->|click · type · scroll| K["Kernel Browser<br/>Remote Chromium · Stealth · Proxies · Profiles"]
+
+    K -->|downloaded files| R["Result<br/>PDF · Reports · Enrollment Forms"]
+
+    style P fill:#18181b,stroke:#27272a,color:#fafafa
+    style NAV fill:#2563eb,stroke:#1d4ed8,color:#fff
+    style DEV fill:#27272a,stroke:#3f3f46,color:#a1a1aa
+    style STG fill:#27272a,stroke:#3f3f46,color:#a1a1aa
+    style GEM fill:#f4f4f5,stroke:#e4e4e7,color:#18181b
+    style K fill:#18181b,stroke:#27272a,color:#fafafa
+    style R fill:#16a34a,stroke:#15803d,color:#fff
 ```
 
 ## Documentation
 
-- [Apps Guide](apps/README.md) - Detailed app documentation
-- [Payloads Guide](payloads/README.md) - Task configurations
+- [Apps & Payloads Guide](apps/README.md) - App details, payload structure, and writing instructions
 - [Web UI Guide](web/README.md) - Development interface
 - [Kernel Docs](https://www.kernel.sh/docs) - Platform docs
 - [Computer Controls API](https://www.kernel.sh/docs/browsers/computer-controls) - Navigator API
-- [Stagehand SDK](https://github.com/browserbase/stagehand) - Driver library

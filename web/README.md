@@ -1,6 +1,6 @@
-# CUA Playground - Web UI
+# Benbase Playground
 
-A development interface for testing and debugging browser automation tasks. Provides real-time monitoring, live browser view, and session replay.
+Development interface for testing and debugging browser automation tasks. Provides real-time monitoring, live browser view, and session replay.
 
 ## Features
 
@@ -21,79 +21,98 @@ node server.js
 ## Interface Layout
 
 ```mermaid
-block-beta
-    columns 2
-
-    block:header:2
-        h["Header"]
+flowchart TD
+    subgraph Header[" "]
+        direction LR
+        LOGO["Benbase Playground"]
+        APPS["Navigator · Navigator (DEV) · Navigator (STG)"]
+        STATUS["Status · Files · Theme"]
     end
 
-    block:left1
-        pe["Payload Editor"]
-        pe1["Select payload file"]
-        pe2["View/edit JSON"]
-        pe3["Mask sensitive fields"]
-        pe4["Run button"]
+    subgraph Main[" "]
+        direction LR
+
+        subgraph Left["Left Panel"]
+            TASKS["Tasks<br/><i>Search · New · Refresh</i><br/><i>Payload list (JSON files)</i>"]
+        end
+
+        subgraph Right["Right Panel — Tabs"]
+            TASK_TAB["Task Tab<br/><i>AOP instructions (left)</i><br/><i>Provider · Client · Group # · URL · Month/Year (right)</i><br/><i>Advanced: Model · Max Steps · Proxy · Credentials</i>"]
+            LIVE_TAB["Live View Tab<br/><i>Browser iframe · Output log · Results</i>"]
+            HIST_TAB["History Tab<br/><i>Session list · Recording · Log · Files</i>"]
+        end
     end
 
-    block:right1
-        lv["Live Browser View"]
-        lv1["Embedded iframe showing"]
-        lv2["Kernel's live browser stream"]
-    end
+    ACTIONBAR["Action Bar — Run · Stop"]
 
-    block:left2
-        sl["Streaming Logs"]
-        sl1["Real-time output from"]
-        sl2["the agent execution"]
-    end
+    Header --> Main
+    Main --> ACTIONBAR
 
-    block:right2
-        rd["Result / Downloads"]
-        rd1["Task status"]
-        rd2["Downloaded files"]
-        rd3["Session recordings"]
-    end
+    style LOGO fill:#18181b,stroke:#27272a,color:#fafafa
+    style APPS fill:#2563eb,stroke:#1d4ed8,color:#fff
+    style STATUS fill:#27272a,stroke:#3f3f46,color:#a1a1aa
+    style TASKS fill:#18181b,stroke:#27272a,color:#fafafa
+    style TASK_TAB fill:#18181b,stroke:#27272a,color:#fafafa
+    style LIVE_TAB fill:#18181b,stroke:#27272a,color:#fafafa
+    style HIST_TAB fill:#18181b,stroke:#27272a,color:#fafafa
+    style ACTIONBAR fill:#2563eb,stroke:#1d4ed8,color:#fff
 ```
 
 ## Configurable Fields
 
-The web UI allows you to modify several payload parameters before running:
+The Task tab has two columns: AOP instructions on the left, and config fields on the right.
+
+**Main fields:**
 
 | Field | Description |
 |-------|-------------|
-| **Target URL** | Starting URL for the browser |
-| **Group Number** | Task-specific variable (substituted into instructions) |
+| **AOP** | Agent Operating Procedure — step-by-step instructions for the agent (uses default master prompt if empty) |
+| **Provider** | Insurance carrier or BenAdmin platform (auto-fills URL and credentials) |
+| **Client** | Client/group name |
+| **Group #** | Group number |
+| **URL** | Starting URL for the browser (auto-filled from provider) |
 | **Month / Year** | Invoice date parameters |
-| **Max Steps** | Maximum agent actions before timeout (10-200). Higher values allow more complex tasks but risk runaway agents |
-| **CUA Model** | Main agent model for screenshots and orchestration (default: Gemini 2.5 Computer Use) |
-| **Stagehand Model** | Model for DOM operations like login and forms (default: Gemini 2.5 Flash) |
+
+**Advanced settings** (collapsed by default):
+
+| Field | Description |
+|-------|-------------|
+| **Navigation Model** | Gemini model for screenshots and orchestration (default: Gemini 2.5 Computer Use) |
+| **Max Steps** | Maximum agent actions before timeout (10-200) |
 | **Proxy** | Bot detection avoidance: mobile, residential, ISP, or datacenter |
 | **Proxy Location** | Country for the proxy IP |
-| **Session Profile** | Persistent browser profile to reuse cookies/sessions |
-| **Credentials** | Username, password, TOTP secret (expandable section) |
+| **Credentials** | Username, password, TOTP secret (override provider defaults) |
 
 Changes made in the UI override the values stored in the payload file for that run.
 
 ## How It Works
 
-1. **Load Payload**: Select a JSON file from `payloads/` directory
-2. **Edit (optional)**: Modify variables, maxSteps, proxy settings in the UI (credentials are masked)
-3. **Run**: Click "Run Task" to invoke the Kernel action
-4. **Monitor**: Watch the live browser view and streaming logs
-5. **Review**: Check results, download files, watch replay
+1. **Select Task**: Pick a task from the left panel (payload JSON files)
+2. **Configure**: Edit AOP instructions, provider, variables, and advanced settings
+3. **Run**: Click Run in the action bar — auto-switches to Live View tab
+4. **Monitor**: Watch the live browser iframe and streaming output log
+5. **Review**: Check results, download files, watch session recording in History tab
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {
+    'actorBkg': '#18181b', 'actorTextColor': '#fafafa', 'actorBorder': '#27272a',
+    'signalColor': '#a1a1aa', 'signalTextColor': '#fafafa',
+    'labelBoxBkgColor': '#27272a', 'labelBoxBorderColor': '#3f3f46', 'labelTextColor': '#fafafa',
+    'loopTextColor': '#a1a1aa',
+    'activationBkgColor': '#2563eb', 'activationBorderColor': '#1d4ed8',
+    'sequenceNumberColor': '#fafafa',
+    'noteBkgColor': '#27272a', 'noteTextColor': '#fafafa', 'noteBorderColor': '#3f3f46'
+}}}%%
 sequenceDiagram
     participant User
     participant WebUI as Web UI
     participant Server as Express Server
     participant Kernel as Kernel CLI
     participant Browser as Kernel Browser
-    participant Agent as CUA Agent
+    participant Agent as Gemini CUA
 
-    User->>WebUI: Select payload & click Run
-    WebUI->>Server: POST /api/run (SSE)
+    User->>WebUI: Select task & click Run
+    WebUI->>Server: POST /api/invoke (SSE)
     Server->>Kernel: kernel invoke ... --payload-file
     Kernel->>Browser: Create browser instance
     Browser-->>Server: Live view URL (via stdout)
@@ -109,39 +128,58 @@ sequenceDiagram
 
     Agent->>Kernel: report_result
     Kernel-->>Server: Task complete + result JSON
-    Server-->>WebUI: SSE: result, completed
+    Server->>Server: Download file from browser session
+    Server-->>WebUI: SSE: fileDownloaded, complete
     WebUI->>User: Show result & downloads
 ```
 
 ## API Endpoints
 
-### GET /api/payloads
-Lists all available payload files from `payloads/` directory.
+### Payloads
 
-### GET /api/payload/:name
-Returns a specific payload with sensitive fields masked.
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/payloads?app=navigator` | List payload files (app-specific + shared) |
+| GET | `/api/payloads/:name?app=navigator` | Get a payload with sensitive fields masked |
+| POST | `/api/payloads` | Save or update a payload |
 
-### POST /api/run
-Starts a task execution with Server-Sent Events (SSE) for streaming.
+### Carriers & Credentials
 
-**Events**:
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/carriers` | List all carriers and BenAdmin platforms |
+| GET | `/api/carriers/:name` | Get carrier config (credentials masked) |
+
+### Master Prompt
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/master-prompt` | Get the default instruction template |
+| PUT | `/api/master-prompt` | Update the default instruction template |
+
+### Task Execution
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/invoke` | Run a task with SSE streaming |
+
+**SSE Events**:
 - `started` - Task invocation began
-- `output` - Log line from agent
+- `output` - Log line from agent (stdout/stderr)
 - `liveViewUrl` - Browser live view URL ready
-- `result` - Final task result
-- `completed` - Execution finished
+- `fileDownloaded` - File downloaded from browser session
+- `historySaved` - Session data persisted
+- `complete` - Execution finished with result
 
-### GET /api/sessions
-Lists all past sessions with metadata.
+### Sessions
 
-### GET /api/sessions/:id/files
-Lists downloadable files from a session.
-
-### GET /api/sessions/:id/files/:filename
-Downloads a file from a session.
-
-### GET /api/sessions/:id/replay
-Returns replay video URL for a session.
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/sessions?app=navigator` | List all past sessions |
+| GET | `/api/sessions/:id?app=navigator` | Get session details |
+| GET | `/api/sessions/:id/recording?app=navigator` | Get session recording (MP4) |
+| GET | `/api/sessions/:id/log?app=navigator` | Get session log (text) |
+| GET | `/api/sessions/:id/files/:filename?app=navigator` | Download a file from a session |
 
 ## File Structure
 
@@ -153,10 +191,12 @@ web/
 │   ├── app.js          # Frontend JavaScript
 │   └── styles.css      # Styling
 └── results/            # Session data (created at runtime)
-    └── <session-id>/
-        ├── metadata.json    # Run info, result, timing
-        ├── output.log       # Full execution log
-        └── *.pdf            # Downloaded files
+    └── <app>/
+        └── <session-id>/
+            ├── metadata.json    # Run info, result, timing
+            ├── log.txt          # Full execution log
+            ├── recording.mp4   # Session recording (if available)
+            └── *.pdf            # Downloaded files
 ```
 
 ## Configuration
@@ -170,16 +210,17 @@ PORT=3001             # Optional, defaults to 3001
 
 ## Session Storage
 
-Each run creates a session directory in `web/results/`:
+Each run creates a session directory in `web/results/<app>/`:
 
 ```
-results/abc123xyz/
-├── metadata.json     # {"payloadName": "...", "result": {...}, "startTime": "..."}
-├── output.log        # Complete execution log
+results/navigator/abc123xyz/
+├── metadata.json     # {"sessionId", "app", "payloadName", "result", "timestamp", ...}
+├── log.txt           # Complete execution log
+├── recording.mp4     # Session recording (if available)
 └── invoice.pdf       # Any downloaded files
 ```
 
-Sessions are preserved for debugging and can be browsed via the UI.
+Sessions are organized by app and preserved for debugging. Browse them via the History tab in the UI.
 
 ## Troubleshooting
 
@@ -188,7 +229,7 @@ Sessions are preserved for debugging and can be browsed via the UI.
 - Browser may have already closed if task finished quickly
 
 **No files downloaded**
-- Check KERNEL_API_KEY is set
+- Check `KERNEL_API_KEY` is set
 - Verify the task reported success with a file path
 
 **Replay not loading**

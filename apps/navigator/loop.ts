@@ -19,6 +19,7 @@ import { TOTP } from 'totp-generator';
 import { ComputerTool } from './tools/computer';
 import { PREDEFINED_COMPUTER_USE_FUNCTIONS, type GeminiFunctionArgs } from './tools/types/gemini';
 import type { Credentials, LoginResult, ReportResultInput } from '../shared/tools/types';
+import { resolveCredentials } from './onepassword';
 import type { TaskResultStatus } from './types';
 
 // 2FA relay API configuration
@@ -273,6 +274,10 @@ export async function samplingLoop({
 
   const computerTool = new ComputerTool(kernel, sessionId);
 
+  // Resolve 1Password references (op:// URLs) to actual values
+  // This is a no-op if credentials don't contain op:// references
+  const resolvedCredentials = await resolveCredentials(credentials);
+
   // Initialize conversation with user query
   const contents: Content[] = [
     {
@@ -433,7 +438,7 @@ export async function samplingLoop({
         if (fc.name === 'perform_login') {
           console.log('[loop] Executing custom tool: perform_login');
           const loginParams = fc.args as unknown as PerformLoginParams;
-          const loginResult = await executeLogin(kernel, sessionId, loginParams, credentials);
+          const loginResult = await executeLogin(kernel, sessionId, loginParams, resolvedCredentials);
 
           functionResponses.push({
             functionResponse: {
@@ -461,7 +466,7 @@ export async function samplingLoop({
         if (fc.name === 'handle_2fa') {
           console.log('[loop] Executing custom tool: handle_2fa');
           const twoFAParams = fc.args as unknown as Handle2FAParams;
-          const twoFAResult = await execute2FA(kernel, sessionId, twoFAParams, credentials);
+          const twoFAResult = await execute2FA(kernel, sessionId, twoFAParams, resolvedCredentials);
 
           functionResponses.push({
             functionResponse: {

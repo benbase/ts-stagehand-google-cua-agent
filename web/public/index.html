@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Benbase - CUA 2.0 Playground</title>
+  <title>Benbase Playground</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20,7 +20,7 @@
       </button>
       <div>
         <h4>Benbase</h4>
-        <h5>CUA 2.0 Playground</h5>
+        <h5>Playground</h5>
       </div>
       <div class="app-switcher" id="app-switcher">
         <button class="app-switcher-btn active" data-app="navigator" title="Vision-based automation (production)">Navigator</button>
@@ -67,6 +67,13 @@
             </svg>
           </button>
         </div>
+      </div>
+      <div class="task-search">
+        <svg class="task-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="task-search-input" class="task-search-input" placeholder="Search...">
       </div>
       <div class="task-list" id="payload-list">
         <div class="task-empty-state">Loading...</div>
@@ -139,10 +146,25 @@
               <div class="task-body-sidebar">
                 <div class="sidebar-fields">
                   <div class="config-field">
-                    <label for="var-carrier">Carrier</label>
-                    <select id="var-carrier">
-                      <option value="">Loading carriers...</option>
-                    </select>
+                    <label>Provider</label>
+                    <div class="picker" id="provider-picker">
+                      <button type="button" class="picker-trigger" id="provider-trigger">
+                        <span class="picker-value" id="provider-label">Select...</span>
+                        <svg class="picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                      </button>
+                      <div class="picker-dropdown" id="provider-dropdown">
+                        <div class="picker-search">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                          </svg>
+                          <input type="text" id="provider-search" placeholder="Search..." autocomplete="off">
+                        </div>
+                        <div class="picker-list" id="provider-list"></div>
+                      </div>
+                    </div>
                   </div>
                   <div class="config-field">
                     <label for="var-client-name">Client</label>
@@ -154,26 +176,24 @@
                   </div>
                   <div class="config-field">
                     <label for="payload-url">URL</label>
-                    <input type="url" id="payload-url" placeholder="Auto-filled from carrier">
+                    <input type="url" id="payload-url" placeholder="Auto-filled from provider">
                   </div>
                   <div class="config-row">
                     <div class="config-field">
-                      <label for="var-invoice-month">Month</label>
-                      <select id="var-invoice-month">
-                        <option value="">Select...</option>
-                        <option value="January">January</option>
-                        <option value="February">February</option>
-                        <option value="March">March</option>
-                        <option value="April">April</option>
-                        <option value="May">May</option>
-                        <option value="June">June</option>
-                        <option value="July">July</option>
-                        <option value="August">August</option>
-                        <option value="September">September</option>
-                        <option value="October">October</option>
-                        <option value="November">November</option>
-                        <option value="December">December</option>
-                      </select>
+                      <label>Month</label>
+                      <div class="picker" id="month-picker">
+                        <button type="button" class="picker-trigger">
+                          <span class="picker-value placeholder">Select...</span>
+                          <svg class="picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="picker-dropdown">
+                          <div class="picker-search">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            <input type="text" placeholder="Search..." autocomplete="off">
+                          </div>
+                          <div class="picker-list"></div>
+                        </div>
+                      </div>
                     </div>
                     <div class="config-field">
                       <label for="var-invoice-year">Year</label>
@@ -193,15 +213,20 @@
               <div class="advanced-settings-content" id="advanced-settings-content">
                 <div class="settings-grid">
                   <div class="config-field">
-                    <label for="agent-model">Navigation Model</label>
-                    <select id="agent-model">
-                      <option value="">Gemini 2.5 CU (Default)</option>
-                      <optgroup label="Other Models" class="driver-only">
-                        <option value="anthropic/claude-sonnet-4-20250514">Claude Sonnet 4</option>
-                        <option value="anthropic/claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
-                        <option value="anthropic/computer-use-preview-2025-03-11">Anthropic CU Preview</option>
-                      </optgroup>
-                    </select>
+                    <label>Navigation Model</label>
+                    <div class="picker" id="model-picker">
+                      <button type="button" class="picker-trigger">
+                        <span class="picker-value placeholder">Gemini 2.5 CU (Default)</span>
+                        <svg class="picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      </button>
+                      <div class="picker-dropdown">
+                        <div class="picker-search">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                          <input type="text" placeholder="Search..." autocomplete="off">
+                        </div>
+                        <div class="picker-list"></div>
+                      </div>
+                    </div>
                   </div>
                   <div class="config-field driver-only">
                     <label for="stagehand-model">DOM Model</label>
@@ -232,30 +257,36 @@
                     <input type="number" id="max-steps" placeholder="50" min="10" max="200">
                   </div>
                   <div class="config-field">
-                    <label for="proxy-type">Proxy</label>
-                    <select id="proxy-type">
-                      <option value="">None (direct)</option>
-                      <option value="mobile">Mobile</option>
-                      <option value="residential">Residential</option>
-                      <option value="isp">ISP</option>
-                      <option value="datacenter">Datacenter</option>
-                    </select>
+                    <label>Proxy</label>
+                    <div class="picker" id="proxy-picker">
+                      <button type="button" class="picker-trigger">
+                        <span class="picker-value placeholder">None (direct)</span>
+                        <svg class="picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      </button>
+                      <div class="picker-dropdown">
+                        <div class="picker-search">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                          <input type="text" placeholder="Search..." autocomplete="off">
+                        </div>
+                        <div class="picker-list"></div>
+                      </div>
+                    </div>
                   </div>
                   <div class="config-field" id="proxy-country-group" style="display: none;">
-                    <label for="proxy-country">Proxy Location</label>
-                    <select id="proxy-country">
-                      <option value="">Auto</option>
-                      <option value="US">United States</option>
-                      <option value="GB">United Kingdom</option>
-                      <option value="CA">Canada</option>
-                      <option value="AU">Australia</option>
-                      <option value="DE">Germany</option>
-                      <option value="FR">France</option>
-                      <option value="NL">Netherlands</option>
-                      <option value="JP">Japan</option>
-                      <option value="SG">Singapore</option>
-                      <option value="BR">Brazil</option>
-                    </select>
+                    <label>Proxy Location</label>
+                    <div class="picker" id="location-picker">
+                      <button type="button" class="picker-trigger">
+                        <span class="picker-value placeholder">Auto</span>
+                        <svg class="picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      </button>
+                      <div class="picker-dropdown">
+                        <div class="picker-search">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                          <input type="text" placeholder="Search..." autocomplete="off">
+                        </div>
+                        <div class="picker-list"></div>
+                      </div>
+                    </div>
                   </div>
                   <div class="config-field driver-only">
                     <label for="profile-name">Session Profile</label>

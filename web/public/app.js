@@ -1,6 +1,149 @@
 /**
- * CUA 2.0 Playground - Apple-inspired UI
+ * CUA 3.0 Playground
  */
+
+/* ── Reusable Picker ─────────────────────────────────────────────────── */
+
+class Picker {
+  static _instances = [];
+  static onOpen = null;
+
+  static closeAll(except) {
+    Picker._instances.forEach(p => { if (p !== except && p.isOpen) p.close(); });
+  }
+
+  constructor(el, opts = {}) {
+    Picker._instances.push(this);
+    this.el = el;
+    this.triggerEl = el.querySelector('.picker-trigger');
+    this.labelEl = el.querySelector('.picker-value');
+    this.searchWrap = el.querySelector('.picker-search');
+    this.searchEl = el.querySelector('.picker-search input');
+    this.listEl = el.querySelector('.picker-list');
+    this.placeholder = opts.placeholder || 'Select...';
+    this.searchable = opts.searchable !== false;
+    this.onChange = opts.onChange || null;
+    this._value = '';
+    this._text = '';
+    this.isOpen = false;
+    this._focusIdx = -1;
+    this.items = [];
+
+    if (!this.searchable && this.searchWrap) this.searchWrap.style.display = 'none';
+    this.labelEl.textContent = this.placeholder;
+    this.labelEl.classList.add('placeholder');
+    this._bind();
+  }
+
+  get value() { return this._value; }
+  set value(v) { this.setValue(v); }
+
+  get text() { return this._text; }
+
+  _bind() {
+    this.triggerEl.addEventListener('click', e => { e.stopPropagation(); this.isOpen ? this.close() : this.open(); });
+    if (this.searchEl) {
+      this.searchEl.addEventListener('input', () => this._render(this.searchEl.value));
+      this.searchEl.addEventListener('keydown', e => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); this._nav(1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); this._nav(-1); }
+        else if (e.key === 'Enter') { e.preventDefault(); this._confirm(); }
+        else if (e.key === 'Escape') { e.stopPropagation(); this.close(); }
+      });
+    }
+    this.listEl.addEventListener('click', e => {
+      const opt = e.target.closest('.picker-option');
+      if (opt) this.select(opt.dataset.value);
+    });
+    document.addEventListener('click', e => { if (this.isOpen && !this.el.contains(e.target)) this.close(); });
+  }
+
+  setItems(items) { this.items = items; this._render(); }
+
+  setValue(v) {
+    this._value = v;
+    const item = this.items.find(i => !i.group && i.value === v);
+    this._text = item ? item.text : '';
+    const isEmpty = v === '' || v == null;
+    this.labelEl.textContent = isEmpty ? this.placeholder : (this._text || this.placeholder);
+    this.labelEl.classList.toggle('placeholder', isEmpty);
+  }
+
+  select(value) {
+    this.setValue(value);
+    this.close();
+    if (this.onChange) this.onChange(this._value, this._text);
+  }
+
+  clear() { this.setValue(''); this._text = ''; this.labelEl.textContent = this.placeholder; this.labelEl.classList.add('placeholder'); }
+
+  open() {
+    Picker.closeAll(this);
+    if (Picker.onOpen) Picker.onOpen();
+    this.isOpen = true;
+    this.el.classList.add('open');
+    if (this.searchEl) this.searchEl.value = '';
+    this._render();
+    if (this.searchable && this.searchEl) requestAnimationFrame(() => this.searchEl.focus());
+  }
+
+  close() { this.isOpen = false; this.el.classList.remove('open'); this._focusIdx = -1; }
+
+  _render(filter = '') {
+    const q = filter.toLowerCase();
+    let html = '';
+    let pendingGroup = null;
+
+    for (const item of this.items) {
+      if (item.group) { pendingGroup = item; continue; }
+      if (q && !item.text.toLowerCase().includes(q)) continue;
+      if (pendingGroup) { html += `<div class="picker-group-label">${pendingGroup.label}</div>`; pendingGroup = null; }
+      const sel = item.value === this._value ? ' selected' : '';
+      html += `<div class="picker-option${sel}" data-value="${item.value}">
+        <svg class="picker-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span>${item.text}</span></div>`;
+    }
+
+    this.listEl.innerHTML = html || '<div class="picker-empty">No results</div>';
+    this._focusIdx = -1;
+  }
+
+  _nav(dir) {
+    const opts = this.listEl.querySelectorAll('.picker-option');
+    if (!opts.length) return;
+    opts.forEach(o => o.classList.remove('focused'));
+    this._focusIdx += dir;
+    if (this._focusIdx < 0) this._focusIdx = opts.length - 1;
+    if (this._focusIdx >= opts.length) this._focusIdx = 0;
+    opts[this._focusIdx].classList.add('focused');
+    opts[this._focusIdx].scrollIntoView({ block: 'nearest' });
+  }
+
+  _confirm() {
+    const opts = this.listEl.querySelectorAll('.picker-option');
+    if (this._focusIdx >= 0 && opts[this._focusIdx]) this.select(opts[this._focusIdx].dataset.value);
+  }
+}
+
+/* ── Picker HTML factory ─────────────────────────────────────────────── */
+
+function pickerHtml(id, placeholder) {
+  return `<div class="picker" id="${id}">
+    <button type="button" class="picker-trigger">
+      <span class="picker-value placeholder">${placeholder}</span>
+      <svg class="picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+    </button>
+    <div class="picker-dropdown">
+      <div class="picker-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" placeholder="Search..." autocomplete="off">
+      </div>
+      <div class="picker-list"></div>
+    </div>
+  </div>`;
+}
+
+/* ── App ──────────────────────────────────────────────────────────────── */
 
 class App {
   constructor() {
@@ -16,12 +159,21 @@ class App {
     this.usesMasterPrompt = true;
     this.clearCredentialsFlag = false;
 
+    // Provider picker state
+    this.providerValue = '';
+    this.providerText = '';
+    this.providerSource = '';
+    this.providerUrl = '';
+    this.providerPickerOpen = false;
+    this.providerFocusIndex = -1;
+
     this.el = {
       mainContent: document.getElementById('main-content'),
       sidebarToggle: document.getElementById('sidebar-toggle'),
       themeToggle: document.getElementById('theme-toggle'),
       themeIcon: document.getElementById('theme-icon'),
       payloadList: document.getElementById('payload-list'),
+      taskSearchInput: document.getElementById('task-search-input'),
       appSwitcher: document.getElementById('app-switcher'),
 
       // Task config form
@@ -32,15 +184,18 @@ class App {
       // Config fields
       payloadUrl: document.getElementById('payload-url'),
       payloadInstruction: document.getElementById('payload-instruction'),
-      varCarrier: document.getElementById('var-carrier'),
+      providerPicker: document.getElementById('provider-picker'),
+      providerTrigger: document.getElementById('provider-trigger'),
+      providerLabel: document.getElementById('provider-label'),
+      providerDropdown: document.getElementById('provider-dropdown'),
+      providerSearch: document.getElementById('provider-search'),
+      providerList: document.getElementById('provider-list'),
       varClientName: document.getElementById('var-client-name'),
       varGroupNumber: document.getElementById('var-group-number'),
-      varInvoiceMonth: document.getElementById('var-invoice-month'),
       varInvoiceYear: document.getElementById('var-invoice-year'),
       maxSteps: document.getElementById('max-steps'),
 
       // Models
-      agentModel: document.getElementById('agent-model'),
       stagehandModel: document.getElementById('stagehand-model'),
 
       // Credentials
@@ -52,8 +207,6 @@ class App {
       clearCredentialsBtn: document.getElementById('clear-credentials-btn'),
 
       // Proxy settings
-      proxyType: document.getElementById('proxy-type'),
-      proxyCountry: document.getElementById('proxy-country'),
       proxyCountryGroup: document.getElementById('proxy-country-group'),
       profileName: document.getElementById('profile-name'),
 
@@ -160,9 +313,77 @@ class App {
   }
 
   async init() {
+    // Initialize pickers
+    this.monthPicker = new Picker(document.getElementById('month-picker'), {
+      placeholder: 'Select...',
+      searchable: false,
+    });
+    this.monthPicker.setItems([
+      { value: 'January', text: 'January' },
+      { value: 'February', text: 'February' },
+      { value: 'March', text: 'March' },
+      { value: 'April', text: 'April' },
+      { value: 'May', text: 'May' },
+      { value: 'June', text: 'June' },
+      { value: 'July', text: 'July' },
+      { value: 'August', text: 'August' },
+      { value: 'September', text: 'September' },
+      { value: 'October', text: 'October' },
+      { value: 'November', text: 'November' },
+      { value: 'December', text: 'December' },
+    ]);
+
+    this.modelPicker = new Picker(document.getElementById('model-picker'), {
+      placeholder: 'Gemini 2.5 CU (Default)',
+      searchable: false,
+    });
+    this.modelPicker.setItems([
+      { value: '', text: 'Gemini 2.5 CU (Default)' },
+      { group: true, label: 'Other Models' },
+      { value: 'anthropic/claude-sonnet-4-20250514', text: 'Claude Sonnet 4' },
+      { value: 'anthropic/claude-sonnet-4-5-20250929', text: 'Claude Sonnet 4.5' },
+      { value: 'anthropic/computer-use-preview-2025-03-11', text: 'Anthropic CU Preview' },
+    ]);
+
+    this.proxyPicker = new Picker(document.getElementById('proxy-picker'), {
+      placeholder: 'None (direct)',
+      searchable: false,
+      onChange: () => this.updateProxyCountryVisibility(),
+    });
+    this.proxyPicker.setItems([
+      { value: '', text: 'None (direct)' },
+      { value: 'mobile', text: 'Mobile' },
+      { value: 'residential', text: 'Residential' },
+      { value: 'isp', text: 'ISP' },
+      { value: 'datacenter', text: 'Datacenter' },
+    ]);
+
+    this.locationPicker = new Picker(document.getElementById('location-picker'), {
+      placeholder: 'Auto',
+      searchable: true,
+    });
+    this.locationPicker.setItems([
+      { value: '', text: 'Auto' },
+      { value: 'US', text: 'United States' },
+      { value: 'GB', text: 'United Kingdom' },
+      { value: 'CA', text: 'Canada' },
+      { value: 'AU', text: 'Australia' },
+      { value: 'DE', text: 'Germany' },
+      { value: 'FR', text: 'France' },
+      { value: 'NL', text: 'Netherlands' },
+      { value: 'JP', text: 'Japan' },
+      { value: 'SG', text: 'Singapore' },
+      { value: 'BR', text: 'Brazil' },
+    ]);
+
+    // Close provider picker when any Picker instance opens
+    Picker.onOpen = () => {
+      if (this.providerPickerOpen) this.closeProviderPicker();
+    };
+
     this.loadTheme();
     await this.loadMasterPrompt();
-    await this.loadCarriers();
+    await this.loadProviders();
     await this.loadPayloads();
     this.bindEvents();
     this.updateAppVisibility();
@@ -208,60 +429,141 @@ class App {
     }
   }
 
-  // Carriers
-  async loadCarriers() {
+  // Providers (carriers + benadmin platforms)
+  async loadProviders() {
     try {
       const res = await fetch('/api/carriers');
-      const carriers = await res.json();
-
-      const insuranceCarriers = carriers.filter(c => c.email2faSource === 'carrier');
-      const hrPlatforms = carriers.filter(c => c.email2faSource === 'benadmin');
-
-      let optionsHtml = '<option value="">Select carrier...</option>';
-
-      if (insuranceCarriers.length > 0) {
-        optionsHtml += '<optgroup label="Insurance Carriers">';
-        for (const carrier of insuranceCarriers) {
-          optionsHtml += `<option value="${carrier.id}" data-url="${carrier.url}" data-source="${carrier.email2faSource}">${carrier.name}</option>`;
-        }
-        optionsHtml += '</optgroup>';
-      }
-
-      if (hrPlatforms.length > 0) {
-        optionsHtml += '<optgroup label="HR Platforms">';
-        for (const carrier of hrPlatforms) {
-          optionsHtml += `<option value="${carrier.id}" data-url="${carrier.url}" data-source="${carrier.email2faSource}">${carrier.name}</option>`;
-        }
-        optionsHtml += '</optgroup>';
-      }
-
-      this.el.varCarrier.innerHTML = optionsHtml;
-      this.carriers = carriers;
+      this.providers = await res.json();
+      this.renderProviderList();
     } catch (e) {
-      console.error('Failed to load carriers:', e);
+      console.error('Failed to load providers:', e);
     }
   }
 
-  async onCarrierChange() {
-    const carrierName = this.el.varCarrier.value;
-    if (!carrierName) {
-      this.currentCarrierConfig = null;
+  renderProviderList(filter = '') {
+    const providers = this.providers || [];
+    const carriers = providers.filter(p => p.category === 'carrier');
+    const benadmin = providers.filter(p => p.category === 'benadmin');
+    const q = filter.toLowerCase();
+
+    const matchedCarriers = q ? carriers.filter(p => p.name.toLowerCase().includes(q)) : carriers;
+    const matchedBenadmin = q ? benadmin.filter(p => p.name.toLowerCase().includes(q)) : benadmin;
+
+    if (!matchedCarriers.length && !matchedBenadmin.length) {
+      this.el.providerList.innerHTML = '<div class="picker-empty">No results</div>';
       return;
     }
 
-    const selectedOption = this.el.varCarrier.selectedOptions[0];
-    const source = selectedOption?.dataset?.source || '';
+    let html = '';
+
+    if (matchedCarriers.length) {
+      html += '<div class="picker-group-label">Carriers</div>';
+      for (const p of matchedCarriers) {
+        const sel = p.id === this.providerValue ? ' selected' : '';
+        html += `<div class="picker-option${sel}" data-value="${p.id}" data-text="${p.name}" data-url="${p.url || ''}" data-source="${p.category}">
+          <svg class="picker-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>${p.name}</span>
+        </div>`;
+      }
+    }
+
+    if (matchedBenadmin.length) {
+      html += '<div class="picker-group-label">BenAdmin</div>';
+      for (const p of matchedBenadmin) {
+        const sel = p.id === this.providerValue ? ' selected' : '';
+        html += `<div class="picker-option${sel}" data-value="${p.id}" data-text="${p.name}" data-url="${p.url || ''}" data-source="${p.category}">
+          <svg class="picker-option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>${p.name}</span>
+        </div>`;
+      }
+    }
+
+    this.el.providerList.innerHTML = html;
+    this.providerFocusIndex = -1;
+  }
+
+  openProviderPicker() {
+    Picker.closeAll();
+    this.providerPickerOpen = true;
+    this.el.providerPicker.classList.add('open');
+    this.el.providerSearch.value = '';
+    this.renderProviderList();
+    requestAnimationFrame(() => this.el.providerSearch.focus());
+  }
+
+  closeProviderPicker() {
+    this.providerPickerOpen = false;
+    this.el.providerPicker.classList.remove('open');
+    this.providerFocusIndex = -1;
+  }
+
+  selectProvider(value, text, source, url) {
+    this.providerValue = value;
+    this.providerText = text;
+    this.providerSource = source;
+    this.providerUrl = url;
+
+    this.el.providerLabel.textContent = text || 'Select...';
+    this.el.providerLabel.classList.toggle('placeholder', !text);
+    this.closeProviderPicker();
+    this.onProviderChange();
+  }
+
+  clearProvider() {
+    this.providerValue = '';
+    this.providerText = '';
+    this.providerSource = '';
+    this.providerUrl = '';
+    this.el.providerLabel.textContent = 'Select...';
+    this.el.providerLabel.classList.add('placeholder');
+    this.currentProviderConfig = null;
+  }
+
+  navigateProviderPicker(direction) {
+    const options = this.el.providerList.querySelectorAll('.picker-option');
+    if (!options.length) return;
+
+    // Remove current focus
+    options.forEach(o => o.classList.remove('focused'));
+
+    this.providerFocusIndex += direction;
+    if (this.providerFocusIndex < 0) this.providerFocusIndex = options.length - 1;
+    if (this.providerFocusIndex >= options.length) this.providerFocusIndex = 0;
+
+    const focused = options[this.providerFocusIndex];
+    focused.classList.add('focused');
+    focused.scrollIntoView({ block: 'nearest' });
+  }
+
+  confirmProviderPicker() {
+    const options = this.el.providerList.querySelectorAll('.picker-option');
+    const focused = this.providerFocusIndex >= 0 && options[this.providerFocusIndex];
+    if (focused) {
+      this.selectProvider(
+        focused.dataset.value,
+        focused.dataset.text,
+        focused.dataset.source,
+        focused.dataset.url
+      );
+    }
+  }
+
+  async onProviderChange() {
+    if (!this.providerValue) {
+      this.currentProviderConfig = null;
+      return;
+    }
 
     try {
-      const res = await fetch(`/api/carriers/${encodeURIComponent(carrierName)}?source=${source}`);
+      const res = await fetch(`/api/carriers/${encodeURIComponent(this.providerValue)}?source=${this.providerSource}`);
       const config = await res.json();
-      this.currentCarrierConfig = config;
+      this.currentProviderConfig = config;
 
       if (config.url) {
         this.el.payloadUrl.value = config.url;
       }
     } catch (e) {
-      console.error('Failed to load carrier config:', e);
+      console.error('Failed to load provider config:', e);
     }
   }
 
@@ -428,6 +730,19 @@ class App {
     }
   }
 
+  filterTasks() {
+    const query = this.el.taskSearchInput.value.toLowerCase().trim();
+    const items = this.el.payloadList.querySelectorAll('.task-item');
+    items.forEach(item => {
+      if (!query) {
+        item.style.display = '';
+        return;
+      }
+      const name = (item.querySelector('.task-item-name')?.textContent || '').toLowerCase();
+      item.style.display = name.includes(query) ? '' : 'none';
+    });
+  }
+
   async selectPayload(name) {
     try {
       // Switch to the task tab when selecting a payload
@@ -457,33 +772,34 @@ class App {
 
       const vars = payload.variables || {};
 
-      // Set carrier
+      // Set provider (set state without triggering onProviderChange twice)
       if (vars.carrier) {
-        const carrierSelect = this.el.varCarrier;
-        for (const option of carrierSelect.options) {
-          if (option.value === vars.carrier || option.text === vars.carrier) {
-            carrierSelect.value = option.value;
-            break;
-          }
+        const match = (this.providers || []).find(p => p.id === vars.carrier || p.name === vars.carrier);
+        if (match) {
+          this.providerValue = match.id;
+          this.providerText = match.name;
+          this.providerSource = match.category;
+          this.providerUrl = match.url || '';
+          this.el.providerLabel.textContent = match.name;
+          this.el.providerLabel.classList.remove('placeholder');
         }
-        await this.onCarrierChange();
+        await this.onProviderChange();
         if (payload.url) {
           this.el.payloadUrl.value = payload.url;
         }
       } else {
-        this.el.varCarrier.value = '';
-        this.currentCarrierConfig = null;
+        this.clearProvider();
       }
 
       this.el.varClientName.value = vars.clientName || '';
       this.el.varGroupNumber.value = vars.groupNumber || '';
-      this.el.varInvoiceMonth.value = vars.invoiceMonth || '';
+      this.monthPicker.value = vars.invoiceMonth || '';
       this.el.varInvoiceYear.value = vars.invoiceYear || '';
       this.el.maxSteps.value = payload.maxSteps || '';
-      this.el.agentModel.value = payload.agentModel || '';
+      this.modelPicker.value = payload.agentModel || '';
       this.el.stagehandModel.value = payload.model || '';
-      this.el.proxyType.value = payload.proxyType || '';
-      this.el.proxyCountry.value = payload.proxyCountry || '';
+      this.proxyPicker.value = payload.proxyType || '';
+      this.locationPicker.value = payload.proxyCountry || '';
       this.el.profileName.value = payload.profileName || '';
       this.updateProxyCountryVisibility();
 
@@ -529,16 +845,16 @@ class App {
     // Reset all fields
     this.el.payloadUrl.value = '';
     this.el.payloadInstruction.value = this.masterPrompt || '';
-    this.el.varCarrier.value = '';
+    this.clearProvider();
     this.el.varClientName.value = '';
     this.el.varGroupNumber.value = '';
-    this.el.varInvoiceMonth.value = '';
+    this.monthPicker.value = '';
     this.el.varInvoiceYear.value = '';
     this.el.maxSteps.value = '';
-    this.el.agentModel.value = '';
+    this.modelPicker.value = '';
     this.el.stagehandModel.value = '';
-    this.el.proxyType.value = '';
-    this.el.proxyCountry.value = '';
+    this.proxyPicker.value = '';
+    this.locationPicker.value = '';
     this.el.profileName.value = '';
     this.updateProxyCountryVisibility();
 
@@ -563,15 +879,15 @@ class App {
     this.el.runBtn.disabled = true;
     this.el.saveBtn.disabled = false;
     this.el.updateBtn.disabled = true;
-    this.el.varCarrier.focus();
+    this.openProviderPicker();
   }
 
   // Proxy
   updateProxyCountryVisibility() {
-    const hasProxy = this.el.proxyType.value !== '';
+    const hasProxy = this.proxyPicker.value !== '';
     this.el.proxyCountryGroup.style.display = hasProxy ? 'block' : 'none';
     if (!hasProxy) {
-      this.el.proxyCountry.value = '';
+      this.locationPicker.value = '';
     }
   }
 
@@ -584,13 +900,14 @@ class App {
       el.style.display = isStagehandApp ? '' : 'none';
     });
 
-    if (!isStagehandApp && this.el.agentModel.value?.startsWith('anthropic/')) {
-      this.el.agentModel.value = '';
+    if (!isStagehandApp && this.modelPicker.value?.startsWith('anthropic/')) {
+      this.modelPicker.value = '';
     }
   }
 
   async onAppChange() {
     this.updateAppVisibility();
+    this.el.taskSearchInput.value = '';
     this.selectedPayload = null;
     this.originalPayload = null;
     this.isNewPayload = false;
@@ -658,22 +975,22 @@ class App {
         body: JSON.stringify({
           app: this.getSelectedApp(),
           payloadName: this.selectedPayload,
-          ...(this.el.varCarrier.value && { carrier: this.el.varCarrier.value }),
+          ...(this.providerValue && { carrier: this.providerValue }),
           variableOverrides: {
-            carrier: this.el.varCarrier.selectedOptions[0]?.text || '',
+            ...(this.providerValue ? { carrier: this.providerText } : {}),
             clientName: this.el.varClientName.value,
             groupNumber: this.el.varGroupNumber.value,
-            invoiceMonth: this.el.varInvoiceMonth.value,
+            invoiceMonth: this.monthPicker.value,
             invoiceYear: this.el.varInvoiceYear.value,
             ...(this.el.varUsername.value && { username: this.el.varUsername.value }),
             ...(this.el.varPassword.value && { password: this.el.varPassword.value }),
             ...(this.el.varTotpSecret.value && { totpSecret: this.el.varTotpSecret.value }),
           },
-          ...(this.el.proxyType.value && { proxyType: this.el.proxyType.value }),
-          ...(this.el.proxyCountry.value && { proxyCountry: this.el.proxyCountry.value }),
+          ...(this.proxyPicker.value && { proxyType: this.proxyPicker.value }),
+          ...(this.locationPicker.value && { proxyCountry: this.locationPicker.value }),
           ...(this.el.profileName.value && { profileName: this.el.profileName.value }),
           ...(this.el.maxSteps.value && { maxSteps: parseInt(this.el.maxSteps.value, 10) }),
-          ...(this.el.agentModel.value && { agentModel: this.el.agentModel.value }),
+          ...(this.modelPicker.value && { agentModel: this.modelPicker.value }),
           ...(this.el.stagehandModel.value && { model: this.el.stagehandModel.value }),
         }),
         signal: this.abortController.signal,
@@ -940,20 +1257,20 @@ class App {
           app: this.getSelectedApp(),
           name: this.selectedPayload,
           payload: {
-            ...(this.el.payloadUrl.value && this.el.payloadUrl.value !== this.currentCarrierConfig?.url && { url: this.el.payloadUrl.value }),
+            ...(this.el.payloadUrl.value && this.el.payloadUrl.value !== this.currentProviderConfig?.url && { url: this.el.payloadUrl.value }),
             ...(!instructionMatchesMaster && { instruction: this.el.payloadInstruction.value }),
             maxSteps: this.el.maxSteps.value ? parseInt(this.el.maxSteps.value, 10) : (this.originalPayload?.maxSteps || 50),
-            ...(this.el.agentModel.value && { agentModel: this.el.agentModel.value }),
+            ...(this.modelPicker.value && { agentModel: this.modelPicker.value }),
             ...(this.el.stagehandModel.value && { model: this.el.stagehandModel.value }),
-            ...(this.el.proxyType.value && { proxyType: this.el.proxyType.value }),
-            ...(this.el.proxyCountry.value && { proxyCountry: this.el.proxyCountry.value }),
+            ...(this.proxyPicker.value && { proxyType: this.proxyPicker.value }),
+            ...(this.locationPicker.value && { proxyCountry: this.locationPicker.value }),
             ...(this.el.profileName.value && { profileName: this.el.profileName.value }),
             variables: {
               ...(this.originalPayload?.variables || {}),
-              ...(this.el.varCarrier.value && { carrier: this.el.varCarrier.selectedOptions[0]?.text || '' }),
+              ...(this.providerValue && { carrier: this.providerText }),
               ...(this.el.varClientName.value && { clientName: this.el.varClientName.value }),
               ...(this.el.varGroupNumber.value && { groupNumber: this.el.varGroupNumber.value }),
-              ...(this.el.varInvoiceMonth.value && { invoiceMonth: this.el.varInvoiceMonth.value }),
+              ...(this.monthPicker.value && { invoiceMonth: this.monthPicker.value }),
               ...(this.el.varInvoiceYear.value && { invoiceYear: this.el.varInvoiceYear.value }),
               ...(this.clearCredentialsFlag
                 ? { username: '__CLEAR__', password: '__CLEAR__', totpSecret: '__CLEAR__' }
@@ -1014,19 +1331,19 @@ class App {
           app: this.getSelectedApp(),
           name: fileName,
           payload: {
-            ...(this.el.payloadUrl.value && this.el.payloadUrl.value !== this.currentCarrierConfig?.url && { url: this.el.payloadUrl.value }),
+            ...(this.el.payloadUrl.value && this.el.payloadUrl.value !== this.currentProviderConfig?.url && { url: this.el.payloadUrl.value }),
             ...(!instructionMatchesMaster && { instruction: this.el.payloadInstruction.value }),
             maxSteps: this.el.maxSteps.value ? parseInt(this.el.maxSteps.value, 10) : 50,
-            ...(this.el.agentModel.value && { agentModel: this.el.agentModel.value }),
+            ...(this.modelPicker.value && { agentModel: this.modelPicker.value }),
             ...(this.el.stagehandModel.value && { model: this.el.stagehandModel.value }),
-            ...(this.el.proxyType.value && { proxyType: this.el.proxyType.value }),
-            ...(this.el.proxyCountry.value && { proxyCountry: this.el.proxyCountry.value }),
+            ...(this.proxyPicker.value && { proxyType: this.proxyPicker.value }),
+            ...(this.locationPicker.value && { proxyCountry: this.locationPicker.value }),
             ...(this.el.profileName.value && { profileName: this.el.profileName.value }),
             variables: {
-              ...(this.el.varCarrier.value && { carrier: this.el.varCarrier.selectedOptions[0]?.text || '' }),
+              ...(this.providerValue && { carrier: this.providerText }),
               ...(this.el.varClientName.value && { clientName: this.el.varClientName.value }),
               ...(this.el.varGroupNumber.value && { groupNumber: this.el.varGroupNumber.value }),
-              ...(this.el.varInvoiceMonth.value && { invoiceMonth: this.el.varInvoiceMonth.value }),
+              ...(this.monthPicker.value && { invoiceMonth: this.monthPicker.value }),
               ...(this.el.varInvoiceYear.value && { invoiceYear: this.el.varInvoiceYear.value }),
               ...(this.el.varUsername.value && { username: this.el.varUsername.value }),
               ...(this.el.varPassword.value && { password: this.el.varPassword.value }),
@@ -1405,6 +1722,7 @@ class App {
     // Task list
     this.el.newPayloadBtn.addEventListener('click', () => this.newPayload());
     this.el.refreshBtn.addEventListener('click', () => this.loadPayloads());
+    this.el.taskSearchInput.addEventListener('input', () => this.filterTasks());
     this.el.payloadList.addEventListener('click', e => {
       const item = e.target.closest('.task-item');
       if (item?.dataset.name) this.selectPayload(item.dataset.name);
@@ -1468,9 +1786,30 @@ class App {
       if (e.key === 'Enter') this.save();
     });
 
-    // Carrier & proxy
-    this.el.varCarrier.addEventListener('change', () => this.onCarrierChange());
-    this.el.proxyType.addEventListener('change', () => this.updateProxyCountryVisibility());
+    // Provider picker
+    this.el.providerTrigger.addEventListener('click', () => {
+      this.providerPickerOpen ? this.closeProviderPicker() : this.openProviderPicker();
+    });
+    this.el.providerSearch.addEventListener('input', () => {
+      this.renderProviderList(this.el.providerSearch.value);
+    });
+    this.el.providerSearch.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); this.navigateProviderPicker(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); this.navigateProviderPicker(-1); }
+      else if (e.key === 'Enter') { e.preventDefault(); this.confirmProviderPicker(); }
+      else if (e.key === 'Escape') { this.closeProviderPicker(); }
+    });
+    this.el.providerList.addEventListener('click', (e) => {
+      const option = e.target.closest('.picker-option');
+      if (option) {
+        this.selectProvider(option.dataset.value, option.dataset.text, option.dataset.source, option.dataset.url);
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (this.providerPickerOpen && !this.el.providerPicker.contains(e.target)) {
+        this.closeProviderPicker();
+      }
+    });
 
     // Credentials
     if (this.el.clearCredentialsBtn) {
@@ -1501,7 +1840,11 @@ class App {
         }
       }
       if (e.key === 'Escape') {
-        if (this.theaterMode) {
+        if (this.providerPickerOpen) {
+          this.closeProviderPicker();
+        } else if ([this.monthPicker, this.modelPicker, this.proxyPicker, this.locationPicker].some(p => p?.isOpen)) {
+          [this.monthPicker, this.modelPicker, this.proxyPicker, this.locationPicker].forEach(p => { if (p?.isOpen) p.close(); });
+        } else if (this.theaterMode) {
           this.exitTheaterMode();
         } else if (this.el.resultsPanel.classList.contains('active')) {
           this.closeResultsPanel();

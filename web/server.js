@@ -20,8 +20,8 @@ if (!KERNEL_API_KEY) {
 const APPS_DIR = path.join(__dirname, '..', 'apps');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const SHARED_PAYLOADS_DIR = path.join(APPS_DIR, 'shared', 'payloads');
-const CARRIERS_DIR = path.join(APPS_DIR, 'shared', 'carriers');
-const BENADMIN_DIR = path.join(APPS_DIR, 'shared', 'benadmin');
+const CREDENTIALS_CARRIERS_DIR = path.join(APPS_DIR, 'shared', 'credentials', 'carriers');
+const CREDENTIALS_BENADMIN_DIR = path.join(APPS_DIR, 'shared', 'credentials', 'benadmin');
 
 // Get payloads directory for a specific app
 function getPayloadsDir(app) {
@@ -436,14 +436,13 @@ app.put('/api/master-prompt', async (req, res) => {
   }
 });
 
-// GET /api/carriers - List all carrier configs with display names (from both carriers and benadmin dirs)
+// GET /api/carriers - List all carriers from credentials directory
 app.get('/api/carriers', async (req, res) => {
   try {
-    await fs.mkdir(CARRIERS_DIR, { recursive: true });
-    await fs.mkdir(BENADMIN_DIR, { recursive: true });
+    await fs.mkdir(CREDENTIALS_CARRIERS_DIR, { recursive: true });
+    await fs.mkdir(CREDENTIALS_BENADMIN_DIR, { recursive: true });
 
-    // Helper to load carriers from a directory with a specific email2faSource
-    const loadFromDir = async (dir, email2faSource) => {
+    const loadFromDir = async (dir, category) => {
       try {
         const files = await fs.readdir(dir);
         const jsonFiles = files.filter(f => f.endsWith('.json'));
@@ -457,10 +456,10 @@ app.get('/api/carriers', async (req, res) => {
                 id,
                 name: config.name || id,
                 url: config.url || '',
-                email2faSource,
+                category,
               };
             } catch {
-              return { id, name: id, url: '', email2faSource };
+              return { id, name: id, url: '', category };
             }
           })
         );
@@ -469,14 +468,12 @@ app.get('/api/carriers', async (req, res) => {
       }
     };
 
-    // Load from both directories
-    const [carriersFromCarriers, carriersFromBenadmin] = await Promise.all([
-      loadFromDir(CARRIERS_DIR, 'carrier'),
-      loadFromDir(BENADMIN_DIR, 'benadmin'),
+    const [carriers, benadmin] = await Promise.all([
+      loadFromDir(CREDENTIALS_CARRIERS_DIR, 'carrier'),
+      loadFromDir(CREDENTIALS_BENADMIN_DIR, 'benadmin'),
     ]);
 
-    // Combine and sort by name
-    const allCarriers = [...carriersFromCarriers, ...carriersFromBenadmin]
+    const allCarriers = [...carriers, ...benadmin]
       .sort((a, b) => a.name.localeCompare(b.name));
 
     res.json(allCarriers);
@@ -521,29 +518,35 @@ app.get('/api/carriers/:name', async (req, res) => {
   }
 });
 
-// Helper: Load carrier config (with actual credentials) - checks both carriers and benadmin dirs
+// Helper: Load carrier config from shared/credentials/ directory
+// Returns { name, credentials (op:// URLs), category }
 async function loadCarrierConfig(carrierName, source = null) {
   if (!carrierName || !/^[a-zA-Z0-9_-]+$/.test(carrierName)) {
     return null;
   }
 
-  // If source is specified, only look in that directory
-  const dirsToCheck = source === 'benadmin' ? [BENADMIN_DIR] :
-                      source === 'carrier' ? [CARRIERS_DIR] :
-                      [CARRIERS_DIR, BENADMIN_DIR]; // Check both if not specified
+  const dirsToCheck = source === 'benadmin' ? [CREDENTIALS_BENADMIN_DIR] :
+                      source === 'carrier' ? [CREDENTIALS_CARRIERS_DIR] :
+                      [CREDENTIALS_CARRIERS_DIR, CREDENTIALS_BENADMIN_DIR];
 
   for (const dir of dirsToCheck) {
     try {
       const filePath = path.join(dir, `${carrierName}.json`);
       const content = await fs.readFile(filePath, 'utf-8');
       const config = JSON.parse(content);
-      // Add email2faSource based on which directory it was found in
-      config.email2faSource = dir === BENADMIN_DIR ? 'benadmin' : 'carrier';
-      return config;
+      if (config.onepassword) {
+        console.log(`[carrier] Loaded 1Password credentials for ${carrierName}`);
+        return {
+          name: config.name || carrierName,
+          credentials: config.onepassword,
+          category: dir === CREDENTIALS_BENADMIN_DIR ? 'benadmin' : 'carrier',
+        };
+      }
     } catch {
       // Not found in this directory, try next
     }
   }
+
   return null;
 }
 
@@ -1014,7 +1017,7 @@ app.get('/api/history/:id/log', (req, res) => {
 // Start server with automatic port fallback
 function startServer(port, maxAttempts = 10) {
   const server = app.listen(port, () => {
-    console.log(`CUA 2.0 Playground listening on http://localhost:${port}`);
+    console.log(`CUA 3.0 Playground listening on http://localhost:${port}`);
   });
 
   server.on('error', (err) => {

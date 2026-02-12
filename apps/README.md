@@ -8,75 +8,87 @@ Each app is self-contained with its own code, tools, and payloads:
 
 ```
 apps/
-├── driver/              # Stagehand/DOM-based automation
+├── navigator/           # Computer Controls API/vision-based automation (production)
 │   ├── index.ts         # Main app entry point
-│   ├── tools.ts         # Driver-specific tools
-│   ├── types.ts         # TypeScript types
-│   └── payloads/        # Driver payloads
-│       ├── kp_invoice_test.json
-│       └── uhc_invoice_test.json
-├── navigator/           # Computer Controls API/vision-based automation
-│   ├── index.ts         # Main app entry point
-│   ├── tools.ts         # Navigator-specific tools (perform_login, etc.)
+│   ├── loop.ts          # Gemini sampling loop
+│   ├── session.ts       # Kernel browser session management
+│   ├── tools/           # Navigator-specific tools (perform_login, etc.)
 │   ├── types.ts         # TypeScript types
 │   └── payloads/        # Navigator payloads
-│       └── guardian_login_test.json
-└── shared/              # Shared utilities and types
-    └── tools/
-        └── types.ts     # Common tool type definitions
+├── navigator-dev/       # Navigator (dev environment, full copy)
+│   └── payloads/        # Dev-specific payloads
+├── navigator-stg/       # Navigator (staging environment, full copy)
+│   └── payloads/        # Staging-specific payloads
+└── shared/              # Shared utilities and configs
+    ├── credentials/     # Credential configs (1Password references)
+    │   ├── carriers/    # Insurance carrier credentials
+    │   └── benadmin/    # BenAdmin credentials
+    ├── tools/
+    │   └── types.ts     # Common tool type definitions
+    └── payloads/        # Shared payloads (available to all apps)
 ```
 
 When using the web interface, the payload list automatically updates when you switch between apps.
 
 ## Payloads
 
-Payloads define what the browser automation agent should do. Each JSON file contains the target URL, step-by-step instructions, credentials, and configuration options.
+Payloads define what the browser automation agent should do. Each JSON file contains the target URL, step-by-step instructions (AOP), task parameters, and configuration options. Credentials are managed separately in 1Password.
 
 ## Task Execution Flow
 
 ```mermaid
-stateDiagram-v2
-    [*] --> LoadPage: Navigate to URL
-    LoadPage --> DismissPopups: Page loaded
-    DismissPopups --> Login: Call perform_login
+flowchart TD
+    START(( )) -->|Navigate to URL| LoadPage["Load Page"]
+    LoadPage -->|Page loaded| DismissPopups["Dismiss Popups"]
+    DismissPopups -->|perform_login| Login["Login"]
 
-    Login --> LoginFailed: Invalid credentials
-    Login --> Navigate: Login success
+    Login -->|Invalid credentials| LoginFailed["Login Failed"]
+    Login -->|Login success| Navigate["Navigate"]
 
-    Navigate --> GroupNotFound: Group not in system
-    Navigate --> FindDocument: Found target
+    Navigate -->|Group not in system| GroupNotFound["Group Not Found"]
+    Navigate -->|Found target| FindDocument["Find Document"]
 
-    FindDocument --> DocumentNotFound: No documents available
-    FindDocument --> Download: Document found
+    FindDocument -->|No documents available| DocumentNotFound["Document Not Found"]
+    FindDocument -->|Document found| Download["Download"]
 
-    Download --> DownloadFailed: Wrong date / error
-    Download --> Success: File downloaded
+    Download -->|Wrong date / error| DownloadFailed["Download Failed"]
+    Download -->|File downloaded| Success["Success"]
 
-    LoginFailed --> [*]: report_result
-    GroupNotFound --> [*]: report_result
-    DocumentNotFound --> [*]: report_result
-    DownloadFailed --> [*]: report_result
-    Success --> [*]: report_result
+    LoginFailed -->|report_result| END(( ))
+    GroupNotFound -->|report_result| END
+    DocumentNotFound -->|report_result| END
+    DownloadFailed -->|report_result| END
+    Success -->|report_result| END
+
+    style START fill:#27272a,stroke:#3f3f46,color:#fafafa
+    style END fill:#27272a,stroke:#3f3f46,color:#fafafa
+    style LoadPage fill:#18181b,stroke:#27272a,color:#fafafa
+    style DismissPopups fill:#18181b,stroke:#27272a,color:#fafafa
+    style Login fill:#2563eb,stroke:#1d4ed8,color:#fff
+    style Navigate fill:#18181b,stroke:#27272a,color:#fafafa
+    style FindDocument fill:#18181b,stroke:#27272a,color:#fafafa
+    style Download fill:#18181b,stroke:#27272a,color:#fafafa
+    style Success fill:#16a34a,stroke:#15803d,color:#fff
+    style LoginFailed fill:#dc2626,stroke:#b91c1c,color:#fff
+    style GroupNotFound fill:#dc2626,stroke:#b91c1c,color:#fff
+    style DocumentNotFound fill:#dc2626,stroke:#b91c1c,color:#fff
+    style DownloadFailed fill:#dc2626,stroke:#b91c1c,color:#fff
 ```
 
 ## Payload Structure
 
 ```json
 {
-  "url": "https://example.com/login",
-  "instruction": "Step-by-step instructions for the agent...",
-  "maxSteps": 50,
+  "url": "https://business.kaiserpermanente.org/business/signon",
+  "instruction": "# Goal\n\nYour instructions here...\n\n# Best Practices\n\n...",
+  "maxSteps": 60,
   "variables": {
-    "username": "user@example.com",
-    "password": "secret123",
-    "totpSecret": "ABCD1234...",
+    "carrier": "KaiserPermanente",
     "groupNumber": "12345",
-    "invoiceMonth": "November",
-    "invoiceYear": "2025"
-  },
-  "proxyType": "residential",
-  "proxyCountry": "US",
-  "profileName": "my-session"
+    "clientName": "Acme Corp",
+    "invoiceMonth": "January",
+    "invoiceYear": "2026"
+  }
 }
 ```
 
@@ -87,57 +99,56 @@ stateDiagram-v2
 | Field | Type | Description |
 |-------|------|-------------|
 | `url` | string | Starting URL for the browser |
-| `instruction` | string | Natural language instructions for the agent |
-| `maxSteps` | number | Maximum agent actions before timeout (typically 30-50) |
+| `instruction` | string | Natural language instructions for the agent (AOP) |
+| `maxSteps` | number | Maximum agent actions before timeout (typically 30-60) |
 
-### Variables (Credentials & Parameters)
+### Variables (Task Parameters)
 
-The `variables` object contains both credentials and task-specific parameters:
+The `variables` object contains task-specific parameters that get substituted into instructions:
 
 ```mermaid
 flowchart LR
-    subgraph Payload["Payload Variables"]
-        V1["username"]
-        V2["password"]
-        V3["totpSecret"]
-        V4["groupNumber"]
-        V5["invoiceMonth"]
+    subgraph Credentials["1Password"]
+        C1["username"]
+        C2["password"]
+        C3["totpSecret"]
     end
 
-    subgraph Processing["Variable Processing"]
-        P1["Sensitive: kept private"]
-        P2["Parameters: substituted"]
+    subgraph Payload["Payload Variables"]
+        V1["carrier"]
+        V2["groupNumber"]
+        V3["invoiceMonth"]
     end
 
     subgraph Output["What Agent Sees"]
-        O1["perform_login tool<br/>(uses credentials internally)"]
+        O1["perform_login tool<br/>(uses 1P credentials)"]
         O2["Instructions with<br/>values filled in"]
     end
 
-    V1 --> P1
-    V2 --> P1
-    V3 --> P1
-    V4 --> P2
-    V5 --> P2
+    C1 --> O1
+    C2 --> O1
+    C3 --> O1
+    V1 --> O2
+    V2 --> O2
+    V3 --> O2
 
-    P1 --> O1
-    P2 --> O2
-
-    style V1 fill:#ffcccc
-    style V2 fill:#ffcccc
-    style V3 fill:#ffcccc
-    style V4 fill:#ccffcc
-    style V5 fill:#ccffcc
+    style C1 fill:#dc2626,stroke:#b91c1c,color:#fff
+    style C2 fill:#dc2626,stroke:#b91c1c,color:#fff
+    style C3 fill:#dc2626,stroke:#b91c1c,color:#fff
+    style V1 fill:#16a34a,stroke:#15803d,color:#fff
+    style V2 fill:#16a34a,stroke:#15803d,color:#fff
+    style V3 fill:#16a34a,stroke:#15803d,color:#fff
 ```
 
-**Credentials** (never sent to LLM):
-- `username` - Login username/email
-- `password` - Login password
-- `totpSecret` - TOTP secret for 2FA (base32 encoded)
-- `email2faProvider` - Provider name for email-based 2FA
+**Credentials** are managed in 1Password via provider configs in `shared/credentials/`. At runtime, `op://` references are resolved to actual values by the 1Password SDK. The model never sees credential values — it calls the `perform_login` tool and provides screen coordinates (where the fields are), then the system types the actual credentials via Computer Controls.
+
+**Credential precedence** (highest to lowest):
+1. **Playground UI** — values entered in the Credentials section override everything
+2. **Payload file** — `username`/`password`/`totpSecret` in `variables` override 1Password
+3. **1Password** — default from provider config (`shared/credentials/`)
 
 **Task Parameters** (substituted into instructions):
-- Any other key like `groupNumber`, `invoiceMonth`, `invoiceYear`
+- Any key like `carrier`, `groupNumber`, `clientName`, `invoiceMonth`, `invoiceYear`
 - Referenced in instructions as `%variableName%`
 - Automatically replaced before sending to agent
 
@@ -148,9 +159,7 @@ flowchart LR
 | `proxyType` | string | `mobile`, `residential`, `isp`, or `datacenter` |
 | `proxyCountry` | string | ISO country code (e.g., `US`, `GB`) |
 | `profileName` | string | Browser profile for persistent sessions |
-| `model` | string | Override Stagehand model |
-| `agentModel` | string | Override CUA agent model |
-| `systemPrompt` | string | Override agent system prompt |
+| `model` | string | Override Gemini model (default: `gemini-2.5-computer-use-preview-10-2025`) |
 
 ## Writing Instructions
 
@@ -166,48 +175,48 @@ Instructions are natural language directions for the CUA agent. Write them as cl
 
 ### Example Instruction
 
+Instructions follow four standard sections: `# Goal`, `# Best Practices`, `# Deliverable`, and `# Common Errors`.
+
 ```
-OBJECTIVE: Download the %invoiceMonth% %invoiceYear% invoice for Group ID %groupNumber%.
+# Goal
 
-STEP 0 - DISMISS COOKIE BANNER (AFTER PAGE LOADS):
-Once the login page has loaded, BEFORE attempting login:
-1. Look for a cookie consent banner at the bottom of the page
-2. Try clicking 'Accept All' button to dismiss it
-3. IF clicking doesn't work after 2 attempts, press Escape and proceed
+You are at the portal for carrier **%carrier%**.
 
-STEP 1 - LOGIN:
-Call perform_login tool. If it returns success=false, immediately call report_result with status 'login_failed'.
+1. Locate the group client **%clientName%** (Group Number: **%groupNumber%**)
+2. Find and download the invoice for **%invoiceMonth% %invoiceYear%**
 
-STEP 2 - NAVIGATE TO BILLING:
-1. Click on "Billing & Payment" in the navigation menu
-2. Wait for the billing page to load
+# Best Practices
 
-STEP 3 - FIND AND DOWNLOAD INVOICE:
-1. Look for the %invoiceMonth% %invoiceYear% invoice
-2. CRITICAL: Verify the date matches EXACTLY before downloading
-3. Click the PDF icon to download
+- Navigate to Billing & Payment in the main menu
+- The group list may take time to load — wait for it to fully populate
+- Search for the group by number or name
+- CRITICAL: Verify the invoice date matches EXACTLY before downloading
+- Dismiss popups/banners but don't get stuck — after 2-3 attempts, proceed
 
-STEP 4 - REPORT RESULT:
-Call report_result with:
-- 'success' + filename if downloaded correctly
-- 'download_failed' if date doesn't match (list available dates)
+# Deliverable
 
-CRITICAL RULES:
-- Dismiss popups/banners but don't get stuck - after 2-3 attempts, proceed
-- Wait for pages to load before interacting
+A downloaded invoice PDF matching the requested group and date.
+
+- Always verify the downloaded document matches the requested date before reporting success
+
+# Common Errors
+
+- The exact invoice date is not available
+- The downloaded document does not match the requested date
+- The login fails
+- The group is not found
 ```
 
 ## Variable Substitution
 
-Non-sensitive variables are substituted into instructions before the agent sees them:
+Variables are substituted into instructions before the agent sees them:
 
 **Payload**:
 ```json
 {
   "instruction": "Find Group ID %groupNumber% and download %invoiceMonth% invoice",
   "variables": {
-    "username": "user@example.com",
-    "password": "secret",
+    "carrier": "KaiserPermanente",
     "groupNumber": "12345",
     "invoiceMonth": "November"
   }
@@ -218,8 +227,6 @@ Non-sensitive variables are substituted into instructions before the agent sees 
 ```
 Find Group ID 12345 and download November invoice
 ```
-
-Note: `username`, `password`, and `totpSecret` are NEVER substituted or sent to the LLM.
 
 ## Proxy Configuration
 
@@ -257,29 +264,30 @@ Benefits:
 
 Payload files follow this pattern:
 ```
-{site}_{task}_{variant}.json
+{carrier}_{action}.json
 ```
 
 Examples:
-- `kp_invoice_test.json` - Kaiser Permanente invoice download (test)
-- `uhc_invoice_bad_login.json` - UHC with intentionally wrong credentials
-- `guardian_invoice_test.json` - Guardian invoice download
+- `kaiser_download_invoice.json` - Kaiser Permanente invoice download
+- `uhc_download_invoice.json` - UHC invoice download
+- `ease_download_enrollment.json` - Ease enrollment form download
+- `rippling_download_enrollment.json` - Rippling enrollment form download
 
 ## Testing Payloads
 
 ### Via CLI
 ```bash
-# Driver app (Stagehand-based)
-kernel invoke driver download-task --payload-file apps/driver/payloads/my_task.json
-
 # Navigator app (Computer Controls API)
 kernel invoke navigator navigate-task --payload-file apps/navigator/payloads/my_task.json
+
+# Navigator DEV
+kernel invoke navigator-DEV navigate-task --payload-file apps/navigator-dev/payloads/my_task.json
 ```
 
 ### Via Web UI
 1. Start the web server: `cd web && node server.js`
 2. Open http://localhost:3001
-3. Select the app (Driver or Navigator) in the header dropdown
+3. Select the environment (navigator, navigator-dev, navigator-stg) in the header
 4. Select your payload from the list
 5. Click "Run" and watch the live view
 

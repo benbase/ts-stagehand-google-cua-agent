@@ -1,4 +1,5 @@
 {
+  "url": "https://www.aetna.com/producer/sso.do?to=bswift_mm",
   "maxSteps": 60,
   "variables": {
     "carrier": "Aetna",
