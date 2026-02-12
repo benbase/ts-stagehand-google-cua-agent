@@ -87,6 +87,7 @@ cd web && node server.js
 Required in root `.env`:
 - `KERNEL_API_KEY` - Kernel platform
 - `GOOGLE_API_KEY` - Gemini models
+- `OP_SERVICE_ACCOUNT_TOKEN` - 1Password SDK (credential resolution)
 
 ## Payloads
 

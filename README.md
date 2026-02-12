@@ -23,7 +23,13 @@ Multiple Kernel applications for intelligent browser automation. Each app uses a
 │   ├── node_modules/       # Shared dependencies
 │   ├── navigator/          # Computer Controls API (production)
 │   ├── navigator-dev/      # Computer Controls API (dev, full copy)
-│   └── navigator-stg/      # Computer Controls API (staging, full copy)
+│   ├── navigator-stg/      # Computer Controls API (staging, full copy)
+│   └── shared/
+│       ├── credentials/    # 1Password credential configs
+│       │   ├── carriers/   # Insurance carriers (17)
+│       │   └── benadmin/   # BenAdmin platforms (3)
+│       ├── tools/          # Common tool type definitions
+│       └── payloads/       # Shared payloads & master prompt
 ├── web/                    # Development UI (separate)
 │   ├── package.json
 │   └── node_modules/
@@ -42,7 +48,7 @@ cd web && npm install
 
 # Configure environment
 cp .env-example .env
-# Add: KERNEL_API_KEY, GOOGLE_API_KEY
+# Add: KERNEL_API_KEY, GOOGLE_API_KEY, OP_SERVICE_ACCOUNT_TOKEN
 ```
 
 ## Deploy
@@ -84,7 +90,7 @@ cd web && node server.js
 
 ```mermaid
 flowchart TD
-    P["Task Payload<br/>URL · Instructions · Credentials"]
+    P["Task Payload<br/>URL · Instructions · Variables"]
 
     P -->|invoke| NAV["navigator<br/><i>production</i>"]
     P -->|invoke| DEV["navigator-DEV<br/><i>development</i>"]

@@ -1,5 +1,4 @@
 {
-  "url": "https://cignaforemployers.cigna.com/public/app/signin",
   "instruction": "# Goal\n\nYou are at %url% for carrier **%carrier%**.\n\n1. Locate the group client **%clientName%** (Group Number: **%groupNumber%**)\n2. Find and download the invoice for **%invoiceMonth% %invoiceYear%** (month number: **%invoiceMonthNumber%**, year: **%invoiceYear%**). Match any invoice where the month is %invoiceMonthNumber% and year is %invoiceYear% — ignore the day.\n\n# Best Practices\n\n\n\n# Deliverable\n\nA downloaded invoice PDF matching the requested group and date.\n\n- Always verify the downloaded document matches the requested date before reporting success\n\n# Common Errors\n\n- The exact invoice date is not available\n- The downloaded document does not match the requested date\n- The login fails\n- The group is not found",
   "maxSteps": 60,
   "variables": {

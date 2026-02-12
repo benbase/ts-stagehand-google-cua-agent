@@ -366,6 +366,14 @@ app.post('/api/payloads', async (req, res) => {
     // Handle JSON payloads
     let finalPayload = { ...payload };
 
+    // Strip URL if it matches the provider's default from shared/credentials
+    if (finalPayload.url && req.body.carrierId) {
+      const carrierConfig = await loadCarrierConfig(req.body.carrierId, req.body.carrierSource || null);
+      if (carrierConfig && finalPayload.url === carrierConfig.url) {
+        delete finalPayload.url;
+      }
+    }
+
     if (originalName && isValidPayloadName(originalName)) {
       const originalPath = getPayloadPath(originalName, app);
       try {
@@ -519,7 +527,7 @@ app.get('/api/carriers/:name', async (req, res) => {
 });
 
 // Helper: Load carrier config from shared/credentials/ directory
-// Returns { name, credentials (op:// URLs), category }
+// Returns { name, url, credentials (op:// URLs), category }
 async function loadCarrierConfig(carrierName, source = null) {
   if (!carrierName || !/^[a-zA-Z0-9_-]+$/.test(carrierName)) {
     return null;
@@ -538,6 +546,7 @@ async function loadCarrierConfig(carrierName, source = null) {
         console.log(`[carrier] Loaded 1Password credentials for ${carrierName}`);
         return {
           name: config.name || carrierName,
+          url: config.url || '',
           credentials: config.onepassword,
           category: dir === CREDENTIALS_BENADMIN_DIR ? 'benadmin' : 'carrier',
         };

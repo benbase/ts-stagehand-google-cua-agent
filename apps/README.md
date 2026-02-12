@@ -79,7 +79,6 @@ flowchart TD
 
 ```json
 {
-  "url": "https://business.kaiserpermanente.org/business/signon",
   "instruction": "# Goal\n\nYour instructions here...\n\n# Best Practices\n\n...",
   "maxSteps": 60,
   "variables": {
@@ -98,9 +97,14 @@ flowchart TD
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `url` | string | Starting URL for the browser |
-| `instruction` | string | Natural language instructions for the agent (AOP) |
+| `instruction` | string | Natural language instructions for the agent (AOP). Omit to use the default master prompt. |
 | `maxSteps` | number | Maximum agent actions before timeout (typically 30-60) |
+
+### URL Resolution
+
+The `url` field is optional in payloads. URLs are resolved in this order:
+1. **Payload `url`** — if set, takes precedence (use to override the default)
+2. **Credential config** — from `shared/credentials/` (the default for each provider)
 
 ### Variables (Task Parameters)
 

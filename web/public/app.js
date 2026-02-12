@@ -1282,6 +1282,7 @@ class App {
             },
           },
           originalName: this.selectedPayload,
+          ...(this.providerValue && { carrierId: this.providerValue, carrierSource: this.providerSource }),
         }),
       });
 
@@ -1350,6 +1351,7 @@ class App {
               ...(this.el.varTotpSecret.value && { totpSecret: this.el.varTotpSecret.value }),
             },
           },
+          ...(this.providerValue && { carrierId: this.providerValue, carrierSource: this.providerSource }),
         }),
       });
 
