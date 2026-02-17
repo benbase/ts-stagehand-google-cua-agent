@@ -63,7 +63,7 @@ cd apps && npm install
 cd web && npm install
 
 # Deploy
-./deploy.sh              # All prod apps
+./deploy.sh              # All apps
 ./deploy.sh navigator    # Navigator only
 ./deploy.sh navigator-dev # Navigator dev only
 ./deploy.sh navigator-stg # Navigator staging only

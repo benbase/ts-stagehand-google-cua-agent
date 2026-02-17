@@ -13,9 +13,6 @@ deploy_app() {
 }
 
 case "${1:-all}" in
-    driver)
-        deploy_app "driver"
-        ;;
     navigator)
         deploy_app "navigator"
         ;;
@@ -25,22 +22,17 @@ case "${1:-all}" in
     navigator-stg)
         deploy_app "navigator-stg"
         ;;
-    old)
-        deploy_app "old"
-        ;;
     all)
-        deploy_app "driver"
         deploy_app "navigator"
-        deploy_app "old"
+        deploy_app "navigator-dev"
+        deploy_app "navigator-stg"
         ;;
     *)
-        echo "Usage: $0 [driver|navigator|navigator-dev|navigator-stg|old|all]"
-        echo "  driver        - Deploy only the driver app (Stagehand-based)"
+        echo "Usage: $0 [navigator|navigator-dev|navigator-stg|all]"
         echo "  navigator     - Deploy only the navigator app (Computer Controls)"
         echo "  navigator-dev - Deploy only the navigator dev app"
         echo "  navigator-stg - Deploy only the navigator staging app"
-        echo "  old           - Deploy only the old app (Legacy Stagehand)"
-        echo "  all           - Deploy all prod apps (default)"
+        echo "  all           - Deploy all apps (default)"
         exit 1
         ;;
 esac
