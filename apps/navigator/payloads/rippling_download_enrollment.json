@@ -4,6 +4,7 @@
   "proxyType": "residential",
   "proxyCountry": "US",
   "variables": {
-    "carrier": "Rippling"
+    "carrier": "Rippling",
+    "clientName": "Chalk"
   }
 }
