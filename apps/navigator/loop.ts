@@ -81,6 +81,13 @@ PAGE LOADING ISSUES:
 - If the page is stuck loading (spinner visible for too long), refresh it.
 - Only report an error about blank/loading pages after attempting multiple refreshes.
 
+CAPTCHA / CLOUDFLARE TURNSTILE:
+- NEVER click on "Verify you are human" checkboxes or Cloudflare Turnstile widgets. The browser's built-in captcha solver handles these AUTOMATICALLY.
+- If you see a Turnstile widget on a login page, just WAIT (use wait_5_seconds) for it to be solved automatically. Do NOT click it.
+- After waiting, if the submit/sign-in button becomes active, proceed normally.
+- If the captcha still appears unsolved after waiting ~15 seconds, try refreshing the page (F5) and waiting again.
+- Only report a login failure due to captcha after refreshing and waiting at least twice.
+
 Current date: ${currentDate}.`;
 
   return customPromptSuffix ? `${basePrompt}\n\n${customPromptSuffix}` : basePrompt;
@@ -682,6 +689,14 @@ async function executeLogin(
 
       console.log('[perform_login] Waiting for password field to appear...');
       await sleep(3000);
+
+      // Rippling workaround: refresh the page at the password step so the
+      // Cloudflare Turnstile captcha solver repositions correctly.
+      if (credentials?.carrier?.toLowerCase().includes('rippling')) {
+        console.log('[perform_login] Rippling detected — refreshing page for captcha solver reposition...');
+        await kernel.browsers.computer.pressKey(sessionId, { keys: ['F5'] });
+        await sleep(10000); // Extra time for captcha solver to reposition and solve
+      }
 
       return { success: true, message: 'Username entered and continue clicked. The password field should now be visible. Call perform_login again with mode "password_only" to enter the password and submit.' };
 
