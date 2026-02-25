@@ -1,0 +1,14 @@
+{
+  "name": "navigator",
+  "version": "1.0.0",
+  "description": "Browser automation using Kernel's Computer Controls API",
+  "type": "module",
+  "main": "index.ts",
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "@onkernel/sdk": "^0.24.0",
+    "dotenv": "^16.4.5",
+    "totp-generator": "^2.0.0",
+    "@1password/sdk": "^0.4.0"
+  }
+}

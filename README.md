@@ -1,51 +1,121 @@
-# Kernel TypeScript SDK + Stagehand + Gemini Computer Use Agent
+# Browser Automation with Computer Use Agent (CUA)
 
-A Kernel application that demonstrates Computer Use Agent (CUA) capabilities using Google's Gemini 2.5 model with Stagehand for browser automation.
+Multiple Kernel applications for intelligent browser automation. Each app uses a different approach to control the browser.
 
-https://github.com/user-attachments/assets/d683f527-be61-4551-9745-1144db088127
+## Apps
 
-## What It Does
+| App | Kernel Name | Approach | Purpose |
+|-----|-------------|----------|---------|
+| **navigator** | `navigator` | Vision-based via Computer Controls | Production |
+| **navigator-dev** | `navigator-DEV` | Vision-based via Computer Controls | Development (experiment here) |
+| **navigator-stg** | `navigator-STG` | Vision-based via Computer Controls | Staging (validate before prod) |
 
-This app uses [Gemini 2.5's computer use model](https://blog.google/technology/google-deepmind/gemini-computer-use-model/) capabilities to autonomously navigate websites and complete tasks. The example task searches for Kernel's company page on YCombinator and writes a blog post about their product.
+### Promotion workflow
+
+`navigator-dev` → `navigator-stg` → `navigator` (prod). Each is a full independent copy so changes can be validated at each stage before promotion.
+
+## Project Structure
+
+```
+├── apps/                   # Kernel apps (npm workspaces)
+│   ├── package.json        # Workspace root
+│   ├── tsconfig.json       # TypeScript config
+│   ├── node_modules/       # Shared dependencies
+│   ├── navigator/          # Computer Controls API (production)
+│   ├── navigator-dev/      # Computer Controls API (dev, full copy)
+│   ├── navigator-stg/      # Computer Controls API (staging, full copy)
+│   └── shared/
+│       ├── credentials/    # 1Password credential configs
+│       │   ├── carriers/   # Insurance carriers (17)
+│       │   └── benadmin/   # BenAdmin platforms (3)
+│       ├── tools/          # Common tool type definitions
+│       └── payloads/       # Shared payloads & master prompt
+├── web/                    # Development UI (separate)
+│   ├── package.json
+│   └── node_modules/
+├── deploy.sh               # Deployment script
+└── .env                    # API keys
+```
 
 ## Setup
 
-1. **Copy the environment file:**
-   ```bash
-   cp .env-example .env
-   ```
-
-2. **Add your API keys to `.env`:**
-   - `KERNEL_API_KEY` - Get from [Kernel dashboard](https://dashboard.onkernel.com/sign-in)
-   - `GOOGLE_API_KEY` - Get from [Google AI Studio](https://aistudio.google.com/apikey)
-   - `OPENAI_API_KEY` - Get from [OpenAI platform](https://platform.openai.com/api-keys)
-
-## Running Locally
-
-Execute the script directly with tsx:
-
 ```bash
-npx tsx index.ts
+# Install app dependencies
+cd apps && npm install
+
+# Install web UI dependencies (separate)
+cd web && npm install
+
+# Configure environment
+cp .env-example .env
+# Add: KERNEL_API_KEY, GOOGLE_API_KEY, OP_SERVICE_ACCOUNT_TOKEN
 ```
 
-This runs the agent without a Kernel invocation context and provides the browser live view URL for debugging.
+## Deploy
 
-## Deploying to Kernel
+```bash
+./deploy.sh              # Deploy all prod apps
+./deploy.sh navigator    # Deploy only navigator (prod)
+./deploy.sh navigator-dev # Deploy only navigator DEV
+./deploy.sh navigator-stg # Deploy only navigator STG
+```
 
-1. **Deploy the application:**
-   ```bash
-   kernel deploy index.ts --env-file .env
-   ```
+## Invoke
 
-2. **Invoke the action:**
-   ```bash
-   kernel invoke ts-stagehand-google-cua-agent google-cua-agent-task
-   ```
+```bash
+# Navigator (prod)
+kernel invoke navigator navigate-task --payload '{"url": "https://example.com", "instruction": "..."}'
 
-The action creates a Kernel-managed browser and associates it with the invocation for tracking and monitoring.
+# Navigator DEV
+kernel invoke navigator-DEV navigate-task --payload '{"url": "https://example.com", "instruction": "..."}'
+
+# Navigator STG
+kernel invoke navigator-STG navigate-task --payload '{"url": "https://example.com", "instruction": "..."}'
+```
+
+## Local Development
+
+```bash
+# Run apps locally (from repo root)
+npx --prefix apps tsx apps/navigator/index.ts
+npx --prefix apps tsx apps/navigator-dev/index.ts
+npx --prefix apps tsx apps/navigator-stg/index.ts
+
+# Web UI
+cd web && node server.js
+# Open http://localhost:3001
+```
+
+## Architecture
+
+```mermaid
+flowchart TD
+    P["Task Payload<br/>URL · Instructions · Variables"]
+
+    P -->|invoke| NAV["navigator<br/><i>production</i>"]
+    P -->|invoke| DEV["navigator-DEV<br/><i>development</i>"]
+    P -->|invoke| STG["navigator-STG<br/><i>staging</i>"]
+
+    NAV --> GEM["Gemini Computer Use<br/>Screenshot → Reason → Act"]
+    DEV --> GEM
+    STG --> GEM
+
+    GEM -->|click · type · scroll| K["Kernel Browser<br/>Remote Chromium · Stealth · Proxies · Profiles"]
+
+    K -->|downloaded files| R["Result<br/>PDF · Reports · Enrollment Forms"]
+
+    style P fill:#18181b,stroke:#27272a,color:#fafafa
+    style NAV fill:#2563eb,stroke:#1d4ed8,color:#fff
+    style DEV fill:#27272a,stroke:#3f3f46,color:#a1a1aa
+    style STG fill:#27272a,stroke:#3f3f46,color:#a1a1aa
+    style GEM fill:#f4f4f5,stroke:#e4e4e7,color:#18181b
+    style K fill:#18181b,stroke:#27272a,color:#fafafa
+    style R fill:#16a34a,stroke:#15803d,color:#fff
+```
 
 ## Documentation
 
-- [Kernel Documentation](https://docs.onkernel.com/quickstart)
-- [Kernel Stagehand Guide](https://www.onkernel.com/docs/integrations/stagehand)
-- [Gemini 2.5 CUA Stagehand Example](https://github.com/browserbase/stagehand/blob/main/examples/cua-example.ts)
+- [Apps & Payloads Guide](apps/README.md) - App details, payload structure, and writing instructions
+- [Web UI Guide](web/README.md) - Development interface
+- [Kernel Docs](https://www.kernel.sh/docs) - Platform docs
+- [Computer Controls API](https://www.kernel.sh/docs/browsers/computer-controls) - Navigator API

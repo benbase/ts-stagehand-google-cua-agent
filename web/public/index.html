@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benbase Playground</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <button class="icon-btn" id="sidebar-toggle" title="Toggle sidebar ([)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="9" y1="3" x2="9" y2="21"></line>
+        </svg>
+      </button>
+      <div>
+        <h4>Benbase</h4>
+        <h5>Playground</h5>
+      </div>
+      <div class="app-switcher" id="app-switcher">
+        <button class="app-switcher-btn active" data-app="navigator" title="Vision-based automation (production)">Navigator</button>
+        <button class="app-switcher-btn" data-app="navigator-dev" title="Vision-based automation (dev)">Navigator (DEV)</button>
+        <button class="app-switcher-btn" data-app="navigator-stg" title="Vision-based automation (staging)">Navigator (STG)</button>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="status-indicator" id="status">
+        <span class="status-dot"></span>
+        <span id="status-text">Ready</span>
+      </span>
+      <button class="icon-btn" id="results-toggle" title="Downloaded Files">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+      </button>
+      <button class="icon-btn" id="theme-toggle" title="Toggle theme">
+        <span id="theme-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </span>
+      </button>
+    </div>
+  </header>
+
+  <main class="main-content" id="main-content">
+    <!-- Left Panel - Task List Only -->
+    <section class="panel panel-left" id="panel-left">
+      <div class="panel-left-header">
+        <h2>Tasks</h2>
+        <div class="panel-left-actions">
+          <button class="icon-btn icon-btn-sm" id="new-payload-btn" title="New task">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="refresh-btn" title="Refresh">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="task-search">
+        <svg class="task-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="task-search-input" class="task-search-input" placeholder="Search...">
+      </div>
+      <div class="task-list" id="payload-list">
+        <div class="task-empty-state">Loading...</div>
+      </div>
+    </section>
+
+    <!-- Right Panel -->
+    <section class="panel panel-right" id="panel-right">
+      <!-- Tabs -->
+      <div class="panel-tabs">
+        <button class="panel-tab active" data-tab="task" id="tab-editor">Task</button>
+        <button class="panel-tab" data-tab="live-view" id="tab-live-view">
+          Live View
+          <span class="tab-status" id="tab-live-status"></span>
+        </button>
+        <button class="panel-tab" data-tab="history" id="tab-history">History</button>
+      </div>
+
+      <!-- Task Configuration Tab -->
+      <div class="tab-content active" id="tab-content-editor">
+        <div class="task-config">
+          <!-- Empty State -->
+          <div class="task-config-empty" id="task-config-empty">
+            <div class="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+            </div>
+            <h3>Select a task</h3>
+            <p>Choose a task from the list to configure and run</p>
+          </div>
+
+          <!-- Configuration Form -->
+          <div class="task-config-form" id="task-config-form" style="display: none;">
+            <!-- Task Header -->
+            <div class="task-header">
+              <h2 class="task-header-title" id="task-header-title">Task</h2>
+              <div class="task-header-actions">
+                <button class="btn btn-primary btn-sm" id="update-btn" disabled>Save</button>
+                <button class="btn btn-sm" id="save-btn" disabled>Save as...</button>
+              </div>
+            </div>
+
+            <!-- Two-column body -->
+            <div class="task-body">
+              <!-- Left: AOP (hero) -->
+              <div class="task-body-main">
+                <div class="config-section aop-section">
+                  <div class="aop-header">
+                    <div class="aop-header-left">
+                      <h3 class="config-section-title">AOP</h3>
+                      <span class="aop-subtitle">Agent Operating Procedure</span>
+                    </div>
+                    <div class="aop-header-actions">
+                      <span class="instructions-status" id="instructions-status">
+                        <span class="instructions-status-dot"></span>
+                        <span id="instructions-status-text">Default</span>
+                      </span>
+                      <button type="button" class="instructions-reset-btn" id="instructions-reset-btn" style="display: none;">
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                  <textarea id="payload-instruction" placeholder="Step-by-step instructions for the agent..."></textarea>
+                </div>
+              </div>
+
+              <!-- Right: Config sidebar -->
+              <div class="task-body-sidebar">
+                <div class="sidebar-fields">
+                  <div class="config-field">
+                    <label>Provider</label>
+                    <div class="picker" id="provider-picker">
+                      <button type="button" class="picker-trigger" id="provider-trigger">
+                        <span class="picker-value" id="provider-label">Select...</span>
+                        <svg class="picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                      </button>
+                      <div class="picker-dropdown" id="provider-dropdown">
+                        <div class="picker-search">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                          </svg>
+                          <input type="text" id="provider-search" placeholder="Search..." autocomplete="off">
+                        </div>
+                        <div class="picker-list" id="provider-list"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="config-field">
+                    <label for="var-client-name">Client</label>
+                    <input type="text" id="var-client-name" placeholder="e.g., Acme Corporation">
+                  </div>
+                  <div class="config-field">
+                    <label for="var-group-number">Group #</label>
+                    <input type="text" id="var-group-number" placeholder="730199">
+                  </div>
+                  <div class="config-field">
+                    <label for="payload-url">URL</label>
+                    <input type="url" id="payload-url" placeholder="Auto-filled from provider">
+                  </div>
+                  <div class="config-row">
+                    <div class="config-field">
+                      <label>Month</label>
+                      <div class="picker" id="month-picker">
+                        <button type="button" class="picker-trigger">
+                          <span class="picker-value placeholder">Select...</span>
+                          <svg class="picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="picker-dropdown">
+                          <div class="picker-search">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            <input type="text" placeholder="Search..." autocomplete="off">
+                          </div>
+                          <div class="picker-list"></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="config-field">
+                      <label for="var-invoice-year">Year</label>
+                      <input type="text" id="var-invoice-year" placeholder="2026">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Advanced Settings -->
+                <div class="advanced-settings" id="advanced-settings">
+              <button type="button" class="advanced-settings-toggle" id="advanced-settings-toggle">
+                <svg class="advanced-settings-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+                Advanced
+              </button>
+              <div class="advanced-settings-content" id="advanced-settings-content">
+                <div class="settings-grid">
+                  <div class="config-field">
+                    <label>Navigation Model</label>
+                    <div class="picker" id="model-picker">
+                      <button type="button" class="picker-trigger">
+                        <span class="picker-value placeholder">Gemini 2.5 CU (Default)</span>
+                        <svg class="picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      </button>
+                      <div class="picker-dropdown">
+                        <div class="picker-search">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                          <input type="text" placeholder="Search..." autocomplete="off">
+                        </div>
+                        <div class="picker-list"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="config-field driver-only">
+                    <label for="stagehand-model">DOM Model</label>
+                    <select id="stagehand-model">
+                      <option value="">Claude Sonnet 4.5 (Default)</option>
+                      <optgroup label="Anthropic">
+                        <option value="anthropic/claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                        <option value="anthropic/claude-opus-4-5-20251101">Claude Opus 4.5</option>
+                      </optgroup>
+                      <optgroup label="OpenAI">
+                        <option value="openai/gpt-4.1">GPT-4.1</option>
+                        <option value="openai/gpt-4o">GPT-4o</option>
+                        <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
+                        <option value="openai/gpt-5.1-2025-11-13">GPT-5.1</option>
+                        <option value="openai/gpt-5.2">GPT-5.2</option>
+                      </optgroup>
+                      <optgroup label="Google">
+                        <option value="google/gemini-3-pro-preview">Gemini 3 Pro</option>
+                        <option value="google/gemini-3-flash-preview">Gemini 3 Flash</option>
+                      </optgroup>
+                      <optgroup label="Other">
+                        <option value="xai/grok-4-1-fast-reasoning">Grok 4.1</option>
+                      </optgroup>
+                    </select>
+                  </div>
+                  <div class="config-field">
+                    <label for="max-steps">Max Steps</label>
+                    <input type="number" id="max-steps" placeholder="50" min="10" max="200">
+                  </div>
+                  <div class="config-field">
+                    <label>Proxy</label>
+                    <div class="picker" id="proxy-picker">
+                      <button type="button" class="picker-trigger">
+                        <span class="picker-value placeholder">None (direct)</span>
+                        <svg class="picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      </button>
+                      <div class="picker-dropdown">
+                        <div class="picker-search">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                          <input type="text" placeholder="Search..." autocomplete="off">
+                        </div>
+                        <div class="picker-list"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="config-field" id="proxy-country-group" style="display: none;">
+                    <label>Proxy Location</label>
+                    <div class="picker" id="location-picker">
+                      <button type="button" class="picker-trigger">
+                        <span class="picker-value placeholder">Auto</span>
+                        <svg class="picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      </button>
+                      <div class="picker-dropdown">
+                        <div class="picker-search">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                          <input type="text" placeholder="Search..." autocomplete="off">
+                        </div>
+                        <div class="picker-list"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="config-field driver-only">
+                    <label for="profile-name">Session Profile</label>
+                    <input type="text" id="profile-name" placeholder="e.g., rippling-session">
+                  </div>
+                </div>
+                <!-- Credentials -->
+                <div class="settings-credentials" id="credentials-section">
+                  <div class="settings-grid">
+                    <div class="config-field">
+                      <label for="var-username">Username</label>
+                      <input type="text" id="var-username" placeholder="Default">
+                    </div>
+                    <div class="config-field">
+                      <label for="var-password">Password</label>
+                      <input type="password" id="var-password" placeholder="Default">
+                    </div>
+                    <div class="config-field">
+                      <label for="var-totp-secret">TOTP Secret</label>
+                      <input type="password" id="var-totp-secret" placeholder="Default">
+                    </div>
+                    <div class="config-field">
+                      <label>&nbsp;</label>
+                      <button type="button" class="btn btn-sm" id="clear-credentials-btn" style="width: 100%;">
+                        Reset to Default
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>  <!-- /advanced-settings -->
+              </div>  <!-- /task-body-sidebar -->
+            </div>  <!-- /task-body -->
+          </div>  <!-- /task-config-form -->
+        </div>  <!-- /task-config -->
+      </div>  <!-- /tab-content-editor -->
+
+      <!-- Live View Tab -->
+      <div class="tab-content" id="tab-content-live-view">
+        <!-- Idle State -->
+        <div class="live-view-idle" id="live-view-idle">
+          <div class="idle-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </div>
+          <h3>Ready to Run</h3>
+          <p>Select a task and click Run to begin</p>
+        </div>
+
+        <!-- Running State -->
+        <div class="running-state" id="running-state" style="display: none;">
+          <!-- Live View -->
+          <div class="card card-grow" id="live-view-card">
+            <div class="card-header">
+              <h2>Live View</h2>
+              <div class="card-actions">
+                <span id="live-view-status">Connecting...</span>
+                <a href="#" id="live-view-link" target="_blank" style="display: none;">Open</a>
+                <button class="icon-btn icon-btn-sm" id="theater-mode-btn" title="Theater mode (T)">
+                  <svg id="theater-expand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <polyline points="9 21 3 21 3 15"></polyline>
+                    <line x1="21" y1="3" x2="14" y2="10"></line>
+                    <line x1="3" y1="21" x2="10" y2="14"></line>
+                  </svg>
+                  <svg id="theater-collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+                    <polyline points="4 14 10 14 10 20"></polyline>
+                    <polyline points="20 10 14 10 14 4"></polyline>
+                    <line x1="14" y1="10" x2="21" y2="3"></line>
+                    <line x1="3" y1="21" x2="10" y2="14"></line>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="live-view-wrapper">
+              <div class="live-view-placeholder" id="live-view-placeholder">
+                Waiting for browser...
+              </div>
+              <iframe class="live-view-iframe" id="live-view-iframe"></iframe>
+              <div class="live-view-overlay" id="live-view-overlay"></div>
+              <div class="theater-hint">Double-click or press T for theater mode</div>
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div class="card" id="results-section" style="display: none;">
+            <div class="card-header">
+              <h2>Results</h2>
+            </div>
+            <div class="results-container" id="results-container"></div>
+          </div>
+
+          <!-- Output -->
+          <div class="card">
+            <div class="card-header">
+              <h2>Output</h2>
+              <div class="card-actions">
+                <button class="btn btn-sm" id="copy-output-btn">Copy</button>
+                <button class="btn btn-sm" id="clear-output-btn">Clear</button>
+              </div>
+            </div>
+            <div class="output-log-wrapper">
+              <pre class="output-log" id="output-log"></pre>
+              <button class="scroll-bottom-btn" id="scroll-bottom-btn" title="Scroll to bottom">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Theater mode exit hint -->
+          <div class="theater-exit-hint">Press Esc to exit theater mode</div>
+        </div>
+      </div>
+
+      <!-- Fixed Action Bar -->
+      <div class="action-bar" id="action-bar">
+        <div class="action-bar-info">
+          <span class="action-bar-task" id="action-bar-task">No task selected</span>
+          <span class="action-bar-status" id="action-bar-status"></span>
+        </div>
+        <div class="action-bar-buttons">
+          <button class="action-bar-btn action-bar-btn-primary" id="run-btn" disabled>
+            <svg class="action-bar-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span id="run-btn-text">Run</span>
+          </button>
+          <button class="action-bar-btn action-bar-btn-danger" id="stop-btn" style="display: none;">
+            <svg class="action-bar-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+            </svg>
+            Stop
+          </button>
+        </div>
+      </div>
+
+      <!-- History Tab -->
+      <div class="tab-content" id="tab-content-history">
+        <div class="history-container">
+          <div class="history-header">
+            <h2>Session History</h2>
+            <button class="btn btn-sm" id="refresh-history-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              Refresh
+            </button>
+          </div>
+          <div class="history-search">
+            <svg class="history-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="history-search-input" class="history-search-input" placeholder="Search sessions...">
+          </div>
+          <div class="history-list" id="history-list">
+            <div class="empty-history">
+              <div class="empty-history-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                </svg>
+              </div>
+              <h4>No recordings yet</h4>
+              <p>Session recordings will appear here after runs complete</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- History Detail View -->
+        <div class="history-detail" id="history-detail" style="display: none;">
+          <div class="history-detail-header">
+            <button class="btn btn-sm" id="history-back-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+              Back
+            </button>
+          </div>
+
+          <div class="history-detail-content">
+            <!-- 1. Status Hero Card -->
+            <div class="run-status-card" id="run-status-card">
+              <div class="run-status-indicator" id="run-status-indicator">
+                <span class="run-status-dot"></span>
+                <span class="run-status-label" id="run-status-label"></span>
+              </div>
+              <h2 class="run-title" id="run-title"></h2>
+              <div class="run-meta" id="run-meta"></div>
+              <p class="run-message" id="run-message"></p>
+              <div class="run-actions" id="run-actions"></div>
+            </div>
+
+            <!-- 2. Files Section -->
+            <div class="run-section" id="run-files-section" style="display: none;">
+              <div class="run-section-header">
+                <h4>Files</h4>
+                <span class="run-section-count" id="run-files-count"></span>
+              </div>
+              <div class="run-files-list" id="run-files-list"></div>
+            </div>
+
+            <!-- 3. Recording Section -->
+            <div class="run-section" id="run-recording-section">
+              <div class="run-section-header">
+                <h4>Recording</h4>
+              </div>
+              <div class="run-recording-content" id="run-recording-content" style="display: none;">
+                <video id="history-video" controls></video>
+                <div class="run-recording-actions">
+                  <a href="#" class="btn btn-sm" id="history-download-recording-link" download>Download Recording</a>
+                </div>
+              </div>
+              <div class="run-recording-empty" id="run-recording-empty">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                </svg>
+                <p>No recording available</p>
+              </div>
+            </div>
+
+            <!-- 4. Log Section -->
+            <div class="run-section" id="run-log-section">
+              <div class="run-section-header">
+                <h4>Log</h4>
+                <button class="btn btn-sm" id="history-copy-log-btn">Copy</button>
+              </div>
+              <pre class="run-log-preview" id="run-log-preview"></pre>
+              <button class="btn btn-sm btn-ghost" id="run-log-expand-btn">Show Full Log</button>
+              <pre class="run-log-full" id="run-log-full" style="display: none;"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Results Panel (Slide-out) -->
+  <div class="panel-overlay" id="results-panel-overlay"></div>
+  <aside class="results-panel" id="results-panel">
+    <div class="results-panel-header">
+      <h3>Downloaded Files</h3>
+      <button class="icon-btn" id="results-panel-close" title="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="results-panel-search">
+      <svg class="results-panel-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input type="text" id="results-search-input" class="results-search-input" placeholder="Search files...">
+    </div>
+    <div class="results-panel-content" id="results-panel-content">
+      <div class="empty-results">
+        <div class="empty-results-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </div>
+        <h4>Loading...</h4>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Save Modal -->
+  <div class="modal-overlay" id="save-modal">
+    <div class="modal">
+      <h3>Save Task</h3>
+      <label for="save-name-input" class="sr-only">Task name</label>
+      <input type="text" id="save-name-input" placeholder="Enter name (e.g., my_task)">
+      <div class="modal-actions">
+        <button class="btn" id="save-cancel-btn">Cancel</button>
+        <button class="btn btn-primary" id="save-confirm-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

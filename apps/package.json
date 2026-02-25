@@ -1,0 +1,18 @@
+{
+  "name": "kernel-apps",
+  "private": true,
+  "workspaces": [
+    "driver",
+    "navigator",
+    "navigator-dev",
+    "navigator-stg",
+    "old"
+  ],
+  "devDependencies": {
+    "tsx": "^4.16.2",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@1password/sdk": "^0.4.0"
+  }
+}
