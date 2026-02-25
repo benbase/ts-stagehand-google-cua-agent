@@ -1,0 +1,9 @@
+{
+  "instruction": "# Goal\n\nYou are at %url% for **%carrier%**.\nYou need to generate a changes report by filling a form, wait for the report to be generated, and then download the report\n\n# Best Practices\n\n- To generate the report, you need to go to \"To-Dos\" menu item and on the Changes -> Manage tab\n- For the \"Date Range\" input, \"Last 14 Days\" should be selected, the rest can stay on \"All\" that is the default\n- Then click on the \"Manage Changes Report\" button, and the report will start generating\n- If you go to the \"Reports\" menu item and \"Generated\" tab, you should see the report on top if it was generated, which you can confirm by comparing the report date being around the time you generated it.\n- You can click on the report name to download it\n\n# Deliverable\n\nA downloaded report file matching the requested change type and date range.\n\n- Verify the downloaded report matches the requested company and report type before reporting success\n\n# Common Errors\n- Reports may take several minutes to generate (up to 5 minutes)\n- The login fails\n- The report name is not found in the Available reports list",
+  "maxSteps": 60,
+  "proxyType": "residential",
+  "proxyCountry": "US",
+  "variables": {
+    "carrier": "Ease"
+  }
+}

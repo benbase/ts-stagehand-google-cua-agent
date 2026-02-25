@@ -1,0 +1,9 @@
+{
+  "instruction": "# Goal\n\nYou are at %url% for **%carrier%**.\nYou need to generate enrollment forms, wait for them to get generated, and download the zip file for company Elevated Comfort and person Matthew Wright\n\n# Best Practices\n\n- To generate the enrollment forms, you need to go to \"To-Dos\" menu item and on the Changes -> Manage tab\n- For the \"Date Range\" input, \"Last 14 Days\" should be selected, the rest can stay on \"All\" that is the default\n- For the company input, select \"Elevated Comfort\"\n- When the list employees appears, find \"Matthew Wright\" and click on the \"Manage\" button for that employee.\n- New window or tab will open with the changes details page for that employee.\n- Then click on the \"Actions\" button, and click \"Enrollment Forms\", and the forms should start generating\n- If you go to the \"Reports\" menu item and \"Generated\" tab, you should see the forms row on top if it was generated, which you can confirm by comparing the name of the report to the employee name\n- You can click on the name to download it\n\n# Deliverable\n\nA downloaded enrollment forms zip file matching the requested employee.\n\n# Common Errors\n- Reports may take several minutes to generate (up to 5 minutes)\n- The login fails\n- The report name is not found in the Available reports list",
+  "maxSteps": 60,
+  "proxyType": "residential",
+  "proxyCountry": "US",
+  "variables": {
+    "carrier": "Ease"
+  }
+}

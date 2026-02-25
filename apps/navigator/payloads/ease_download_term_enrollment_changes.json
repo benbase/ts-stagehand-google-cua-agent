@@ -1,0 +1,9 @@
+{
+  "instruction": "# Goal\n\nDownload the managed changes report in %carrier% to track recent enrollment changes – an agency-wide change report of all enrollment changes across all clients \n\n# Best Practices\n- The Ease instance is at %url%\n- Use the shared Cari Ease login in 1Password\n- To generate the report, you need to go to \"To-Dos\" menu item and on the Changes -> Manage tab\n- For the \"Change Type\" input, \"Employment Termination\" should be selected, the rest can stay on default values\n- Then click on the \"Manage Changes Report\" button, and the report will start generating\n- If you go to the \"Reports\" menu item and \"Generated\" tab, you should see the report on top if it was generated, which you can confirm by comparing the report date being around the time you generated it. You may have to refresh the reports tab if the report is  not yet available \n\n# Deliverable\nA downloaded report file matching the requested change type and date range stored in the root of the clients folder with title Ease Daily Term Changes Report (save it dated and keep only the last 5 days)\n\n# Common Errors\nThe login fails\nThe report is not found in the Available reports list after several minutes",
+  "maxSteps": 60,
+  "proxyType": "residential",
+  "proxyCountry": "US",
+  "variables": {
+    "carrier": "Ease"
+  }
+}
