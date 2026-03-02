@@ -816,32 +816,31 @@ app.post('/api/invoke', async (req, res) => {
       console.error('Failed to parse result:', e);
     }
 
-    // Download file from Kernel if we have session info and a remote path
+    // Download files from Kernel if we have session info and a files array
     let downloadedFiles = [];
-    if (taskResult && taskResult.sessionId && taskResult.remotePath) {
-      // Create session directory first (organized by app)
+    const files = taskResult?.files || [];
+    if (taskResult?.sessionId && files.length > 0) {
       const sessionDir = getSessionDir(app, taskResult.sessionId);
       await fs.mkdir(sessionDir, { recursive: true });
 
-      const filename = taskResult.result?.filename || path.basename(taskResult.remotePath);
+      for (const file of files) {
+        const downloaded = await downloadFromKernel(
+          taskResult.sessionId,
+          file.remotePath,
+          file.filename,
+          sessionDir
+        );
 
-      const downloadedFile = await downloadFromKernel(
-        taskResult.sessionId,
-        taskResult.remotePath,
-        filename,
-        sessionDir
-      );
-
-      if (downloadedFile) {
-        downloadedFiles.push({
-          filename: downloadedFile.filename,
-          size: downloadedFile.size,
-        });
-        taskResult.downloadedFile = downloadedFile;
-        sendEvent('fileDownloaded', {
-          filename: downloadedFile.filename,
-          size: downloadedFile.size,
-        });
+        if (downloaded) {
+          downloadedFiles.push({
+            filename: downloaded.filename,
+            size: downloaded.size,
+          });
+          sendEvent('fileDownloaded', {
+            filename: downloaded.filename,
+            size: downloaded.size,
+          });
+        }
       }
     }
 

@@ -1183,6 +1183,18 @@ class App {
       }
     }
 
+    // File count summary
+    const fileCount = result.files?.length || 0;
+    if (fileCount > 0) {
+      const filesDiv = document.createElement('div');
+      filesDiv.className = 'result-status';
+      const strong = document.createElement('strong');
+      strong.textContent = fileCount;
+      filesDiv.appendChild(strong);
+      filesDiv.appendChild(document.createTextNode(` file${fileCount !== 1 ? 's' : ''} downloaded`));
+      c.appendChild(filesDiv);
+    }
+
     // "View Run Details" button — links to history detail for this session
     if (this.lastCompletedSessionId) {
       const actions = document.createElement('div');
