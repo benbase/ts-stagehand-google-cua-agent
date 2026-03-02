@@ -155,6 +155,9 @@ class App {
     this.theaterMode = false;
     this.sidebarWasVisible = true;
     this.theaterHintTimeout = null;
+    this._isResizing = false;
+    this._resizeStartX = 0;
+    this._resizeStartWidth = 0;
     this.masterPrompt = null;
     this.usesMasterPrompt = true;
     this.clearCredentialsFlag = false;
@@ -170,6 +173,8 @@ class App {
     this.el = {
       mainContent: document.getElementById('main-content'),
       sidebarToggle: document.getElementById('sidebar-toggle'),
+      resizeHandle: document.getElementById('resize-handle'),
+      panelLeft: document.getElementById('panel-left'),
       themeToggle: document.getElementById('theme-toggle'),
       themeIcon: document.getElementById('theme-icon'),
       payloadList: document.getElementById('payload-list'),
@@ -268,8 +273,16 @@ class App {
       // Save modal
       saveModal: document.getElementById('save-modal'),
       saveNameInput: document.getElementById('save-name-input'),
+      saveFilenamePreview: document.getElementById('save-filename-preview'),
       saveCancelBtn: document.getElementById('save-cancel-btn'),
       saveConfirmBtn: document.getElementById('save-confirm-btn'),
+
+      // Delete modal
+      deleteBtn: document.getElementById('delete-btn'),
+      deleteModal: document.getElementById('delete-modal'),
+      deleteModalMessage: document.getElementById('delete-modal-message'),
+      deleteCancelBtn: document.getElementById('delete-cancel-btn'),
+      deleteConfirmBtn: document.getElementById('delete-confirm-btn'),
 
       // Results panel
       resultsToggle: document.getElementById('results-toggle'),
@@ -593,6 +606,52 @@ class App {
     this.el.mainContent.classList.toggle('sidebar-collapsed');
   }
 
+  initResize() {
+    const handle = this.el.resizeHandle;
+    const panelLeft = this.el.panelLeft;
+
+    // Restore persisted width
+    const savedWidth = localStorage.getItem('sidebar-width');
+    if (savedWidth) {
+      const w = parseInt(savedWidth, 10);
+      if (w >= 150 && w <= 500) {
+        panelLeft.style.setProperty('--sidebar-width', w + 'px');
+      }
+    }
+
+    handle.addEventListener('mousedown', (e) => {
+      if (this.el.mainContent.classList.contains('sidebar-collapsed')) return;
+      e.preventDefault();
+      this._isResizing = true;
+      this._resizeStartX = e.clientX;
+      this._resizeStartWidth = panelLeft.getBoundingClientRect().width;
+      panelLeft.classList.add('resizing');
+      handle.classList.add('active');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!this._isResizing) return;
+      const delta = e.clientX - this._resizeStartX;
+      const newWidth = Math.max(150, Math.min(500, this._resizeStartWidth + delta));
+      panelLeft.style.setProperty('--sidebar-width', newWidth + 'px');
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!this._isResizing) return;
+      this._isResizing = false;
+      panelLeft.classList.remove('resizing');
+      handle.classList.remove('active');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      const currentWidth = panelLeft.getBoundingClientRect().width;
+      if (currentWidth > 0) {
+        localStorage.setItem('sidebar-width', Math.round(currentWidth));
+      }
+    });
+  }
+
   // App Switcher
   getSelectedApp() {
     const activeBtn = this.el.appSwitcher.querySelector('.app-switcher-btn.active');
@@ -828,6 +887,7 @@ class App {
       this.el.runBtn.disabled = false;
       this.el.saveBtn.disabled = false;
       this.el.updateBtn.disabled = false;
+      this.el.deleteBtn.disabled = false;
     } catch (e) {
       this.setStatus('error', 'Load failed');
     }
@@ -879,6 +939,7 @@ class App {
     this.el.runBtn.disabled = true;
     this.el.saveBtn.disabled = false;
     this.el.updateBtn.disabled = true;
+    this.el.deleteBtn.disabled = true;
     this.openProviderPicker();
   }
 
@@ -919,6 +980,7 @@ class App {
     // Reset buttons and action bar
     this.el.runBtn.disabled = true;
     this.el.updateBtn.disabled = true;
+    this.el.deleteBtn.disabled = true;
     this.el.actionBarTask.textContent = 'No task selected';
     this.el.actionBarStatus.textContent = '';
 
@@ -1183,6 +1245,18 @@ class App {
       }
     }
 
+    // File count summary
+    const fileCount = result.files?.length || 0;
+    if (fileCount > 0) {
+      const filesDiv = document.createElement('div');
+      filesDiv.className = 'result-status';
+      const strong = document.createElement('strong');
+      strong.textContent = fileCount;
+      filesDiv.appendChild(strong);
+      filesDiv.appendChild(document.createTextNode(` file${fileCount !== 1 ? 's' : ''} downloaded`));
+      c.appendChild(filesDiv);
+    }
+
     // "View Run Details" button — links to history detail for this session
     if (this.lastCompletedSessionId) {
       const actions = document.createElement('div');
@@ -1225,9 +1299,27 @@ class App {
   }
 
   // Save
+  toFilename(displayName) {
+    return displayName
+      .trim()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+  }
+
+  updateFilenamePreview() {
+    const filename = this.toFilename(this.el.saveNameInput.value);
+    this.el.saveFilenamePreview.textContent = filename
+      ? `Saves as: ${filename}.json`
+      : '';
+  }
+
   openSaveModal() {
-    this.el.saveNameInput.value = this.isNewPayload ? 'new_task' :
-        (this.selectedPayload?.replace('.json', '') + '_copy') || 'task';
+    const rawName = this.isNewPayload ? 'new task' :
+        (this.selectedPayload?.replace('.json', '').replace(/_/g, ' ') + ' copy') || 'task';
+    this.el.saveNameInput.value = rawName;
+    this.updateFilenamePreview();
     this.el.saveModal.classList.add('active');
     this.el.saveNameInput.focus();
     this.el.saveNameInput.select();
@@ -1235,6 +1327,54 @@ class App {
 
   closeSaveModal() {
     this.el.saveModal.classList.remove('active');
+    this.el.saveFilenamePreview.textContent = '';
+  }
+
+  openDeleteModal() {
+    if (!this.selectedPayload) return;
+    const displayName = this.selectedPayload.replace(/\.json$/, '').replace(/_/g, ' ');
+    this.el.deleteModalMessage.textContent = `Are you sure you want to delete "${displayName}"? This cannot be undone.`;
+    this.el.deleteModal.classList.add('active');
+  }
+
+  closeDeleteModal() {
+    this.el.deleteModal.classList.remove('active');
+  }
+
+  async deleteTask() {
+    if (!this.selectedPayload) return;
+
+    try {
+      const res = await fetch(
+        `/api/payloads/${encodeURIComponent(this.selectedPayload)}?app=${this.getSelectedApp()}`,
+        { method: 'DELETE' }
+      );
+
+      if (!res.ok) {
+        this.setStatus('error', 'Delete failed');
+        return;
+      }
+
+      this.closeDeleteModal();
+      this.setStatus('success', 'Deleted');
+
+      // Reset to empty state
+      this.selectedPayload = null;
+      this.originalPayload = null;
+      this.isNewPayload = false;
+      this.el.taskConfigEmpty.style.display = 'flex';
+      this.el.taskConfigForm.style.display = 'none';
+      this.el.runBtn.disabled = true;
+      this.el.updateBtn.disabled = true;
+      this.el.saveBtn.disabled = true;
+      this.el.deleteBtn.disabled = true;
+      this.el.actionBarTask.textContent = 'No task selected';
+      this.el.actionBarStatus.textContent = '';
+
+      await this.loadPayloads();
+    } catch {
+      this.setStatus('error', 'Delete failed');
+    }
   }
 
   async update() {
@@ -1318,10 +1458,10 @@ class App {
   }
 
   async save() {
-    const name = this.el.saveNameInput.value.trim();
+    const name = this.toFilename(this.el.saveNameInput.value);
     if (!name) return;
 
-    const fileName = name.endsWith('.json') ? name : `${name}.json`;
+    const fileName = `${name}.json`;
     const instructionMatchesMaster = this.instructionMatchesMaster();
 
     try {
@@ -1787,6 +1927,15 @@ class App {
     this.el.saveNameInput.addEventListener('keypress', e => {
       if (e.key === 'Enter') this.save();
     });
+    this.el.saveNameInput.addEventListener('input', () => this.updateFilenamePreview());
+
+    // Delete modal
+    this.el.deleteBtn.addEventListener('click', () => this.openDeleteModal());
+    this.el.deleteCancelBtn.addEventListener('click', () => this.closeDeleteModal());
+    this.el.deleteConfirmBtn.addEventListener('click', () => this.deleteTask());
+    this.el.deleteModal.addEventListener('click', e => {
+      if (e.target === this.el.deleteModal) this.closeDeleteModal();
+    });
 
     // Provider picker
     this.el.providerTrigger.addEventListener('click', () => {
@@ -1852,6 +2001,8 @@ class App {
           this.closeResultsPanel();
         } else if (this.el.saveModal.classList.contains('active')) {
           this.closeSaveModal();
+        } else if (this.el.deleteModal.classList.contains('active')) {
+          this.closeDeleteModal();
         } else if (this.el.advancedSettings.classList.contains('expanded')) {
           this.collapseAdvancedSettings();
         } else if (this.isRunning) {
@@ -1876,6 +2027,9 @@ class App {
         }
       }
     });
+
+    // Initialize panel resize
+    this.initResize();
   }
 }
 

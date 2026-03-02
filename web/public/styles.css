@@ -239,6 +239,35 @@ body {
   overflow: hidden;
 }
 
+/* Resize Handle */
+.resize-handle {
+  width: 4px;
+  background: transparent;
+  cursor: col-resize;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  transition: background 0.2s ease;
+}
+.resize-handle:hover,
+.resize-handle.active {
+  background: #000000;
+}
+.resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+}
+.main-content.sidebar-collapsed .resize-handle {
+  display: none;
+}
+.panel-left.resizing {
+  transition: none;
+}
+
 .panel-left-header {
   display: flex;
   align-items: center;
@@ -1088,6 +1117,11 @@ input::placeholder, textarea::placeholder {
   background: var(--error);
   border-color: var(--error);
   color: white;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
 }
 
 .btn-success {
@@ -2217,8 +2251,24 @@ input::placeholder, textarea::placeholder {
   margin-bottom: 16px;
 }
 
-.modal input {
+.modal-description {
+  color: var(--text-secondary);
+  font-size: 14px;
   margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.modal input {
+  margin-bottom: 8px;
+}
+
+.save-filename-preview {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  padding: 0 2px;
+  min-height: 18px;
+  font-family: 'SF Mono', 'Fira Code', Monaco, Consolas, monospace;
 }
 
 .modal-actions {
@@ -2285,6 +2335,10 @@ button:focus:not(:focus-visible) {
 @media (max-width: 768px) {
   :root {
     --sidebar-width: 100%;
+  }
+
+  .resize-handle {
+    display: none;
   }
 
   .panel-left {
