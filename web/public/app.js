@@ -277,6 +277,13 @@ class App {
       saveCancelBtn: document.getElementById('save-cancel-btn'),
       saveConfirmBtn: document.getElementById('save-confirm-btn'),
 
+      // Delete modal
+      deleteBtn: document.getElementById('delete-btn'),
+      deleteModal: document.getElementById('delete-modal'),
+      deleteModalMessage: document.getElementById('delete-modal-message'),
+      deleteCancelBtn: document.getElementById('delete-cancel-btn'),
+      deleteConfirmBtn: document.getElementById('delete-confirm-btn'),
+
       // Results panel
       resultsToggle: document.getElementById('results-toggle'),
       resultsPanel: document.getElementById('results-panel'),
@@ -880,6 +887,7 @@ class App {
       this.el.runBtn.disabled = false;
       this.el.saveBtn.disabled = false;
       this.el.updateBtn.disabled = false;
+      this.el.deleteBtn.disabled = false;
     } catch (e) {
       this.setStatus('error', 'Load failed');
     }
@@ -931,6 +939,7 @@ class App {
     this.el.runBtn.disabled = true;
     this.el.saveBtn.disabled = false;
     this.el.updateBtn.disabled = true;
+    this.el.deleteBtn.disabled = true;
     this.openProviderPicker();
   }
 
@@ -971,6 +980,7 @@ class App {
     // Reset buttons and action bar
     this.el.runBtn.disabled = true;
     this.el.updateBtn.disabled = true;
+    this.el.deleteBtn.disabled = true;
     this.el.actionBarTask.textContent = 'No task selected';
     this.el.actionBarStatus.textContent = '';
 
@@ -1318,6 +1328,53 @@ class App {
   closeSaveModal() {
     this.el.saveModal.classList.remove('active');
     this.el.saveFilenamePreview.textContent = '';
+  }
+
+  openDeleteModal() {
+    if (!this.selectedPayload) return;
+    const displayName = this.selectedPayload.replace(/\.json$/, '').replace(/_/g, ' ');
+    this.el.deleteModalMessage.textContent = `Are you sure you want to delete "${displayName}"? This cannot be undone.`;
+    this.el.deleteModal.classList.add('active');
+  }
+
+  closeDeleteModal() {
+    this.el.deleteModal.classList.remove('active');
+  }
+
+  async deleteTask() {
+    if (!this.selectedPayload) return;
+
+    try {
+      const res = await fetch(
+        `/api/payloads/${encodeURIComponent(this.selectedPayload)}?app=${this.getSelectedApp()}`,
+        { method: 'DELETE' }
+      );
+
+      if (!res.ok) {
+        this.setStatus('error', 'Delete failed');
+        return;
+      }
+
+      this.closeDeleteModal();
+      this.setStatus('success', 'Deleted');
+
+      // Reset to empty state
+      this.selectedPayload = null;
+      this.originalPayload = null;
+      this.isNewPayload = false;
+      this.el.taskConfigEmpty.style.display = 'flex';
+      this.el.taskConfigForm.style.display = 'none';
+      this.el.runBtn.disabled = true;
+      this.el.updateBtn.disabled = true;
+      this.el.saveBtn.disabled = true;
+      this.el.deleteBtn.disabled = true;
+      this.el.actionBarTask.textContent = 'No task selected';
+      this.el.actionBarStatus.textContent = '';
+
+      await this.loadPayloads();
+    } catch {
+      this.setStatus('error', 'Delete failed');
+    }
   }
 
   async update() {
@@ -1872,6 +1929,14 @@ class App {
     });
     this.el.saveNameInput.addEventListener('input', () => this.updateFilenamePreview());
 
+    // Delete modal
+    this.el.deleteBtn.addEventListener('click', () => this.openDeleteModal());
+    this.el.deleteCancelBtn.addEventListener('click', () => this.closeDeleteModal());
+    this.el.deleteConfirmBtn.addEventListener('click', () => this.deleteTask());
+    this.el.deleteModal.addEventListener('click', e => {
+      if (e.target === this.el.deleteModal) this.closeDeleteModal();
+    });
+
     // Provider picker
     this.el.providerTrigger.addEventListener('click', () => {
       this.providerPickerOpen ? this.closeProviderPicker() : this.openProviderPicker();
@@ -1936,6 +2001,8 @@ class App {
           this.closeResultsPanel();
         } else if (this.el.saveModal.classList.contains('active')) {
           this.closeSaveModal();
+        } else if (this.el.deleteModal.classList.contains('active')) {
+          this.closeDeleteModal();
         } else if (this.el.advancedSettings.classList.contains('expanded')) {
           this.collapseAdvancedSettings();
         } else if (this.isRunning) {

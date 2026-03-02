@@ -413,6 +413,28 @@ app.post('/api/payloads', async (req, res) => {
   }
 });
 
+// DELETE /api/payloads/:name - Delete a payload file
+app.delete('/api/payloads/:name', async (req, res) => {
+  try {
+    const name = req.params.name;
+    const appName = req.query.app || 'navigator';
+
+    if (!isValidPayloadName(name)) {
+      return res.status(400).json({ error: 'Invalid payload name' });
+    }
+
+    const filePath = getPayloadPath(name, appName);
+    await fs.unlink(filePath);
+    res.json({ success: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ error: 'Payload not found' });
+    }
+    console.error('Error deleting payload:', error);
+    res.status(500).json({ error: 'Failed to delete payload' });
+  }
+});
+
 // GET /api/master-prompt - Get the master prompt template
 app.get('/api/master-prompt', async (req, res) => {
   try {
