@@ -80,6 +80,9 @@
       </div>
     </section>
 
+    <!-- Resize Handle -->
+    <div class="resize-handle" id="resize-handle"></div>
+
     <!-- Right Panel -->
     <section class="panel panel-right" id="panel-right">
       <!-- Tabs -->
@@ -566,7 +569,8 @@
     <div class="modal">
       <h3>Save Task</h3>
       <label for="save-name-input" class="sr-only">Task name</label>
-      <input type="text" id="save-name-input" placeholder="Enter name (e.g., my_task)">
+      <input type="text" id="save-name-input" placeholder="Enter name (e.g., My Cool Task)">
+      <div class="save-filename-preview" id="save-filename-preview"></div>
       <div class="modal-actions">
         <button class="btn" id="save-cancel-btn">Cancel</button>
         <button class="btn btn-primary" id="save-confirm-btn">Save</button>

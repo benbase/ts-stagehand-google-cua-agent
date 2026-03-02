@@ -155,6 +155,9 @@ class App {
     this.theaterMode = false;
     this.sidebarWasVisible = true;
     this.theaterHintTimeout = null;
+    this._isResizing = false;
+    this._resizeStartX = 0;
+    this._resizeStartWidth = 0;
     this.masterPrompt = null;
     this.usesMasterPrompt = true;
     this.clearCredentialsFlag = false;
@@ -170,6 +173,8 @@ class App {
     this.el = {
       mainContent: document.getElementById('main-content'),
       sidebarToggle: document.getElementById('sidebar-toggle'),
+      resizeHandle: document.getElementById('resize-handle'),
+      panelLeft: document.getElementById('panel-left'),
       themeToggle: document.getElementById('theme-toggle'),
       themeIcon: document.getElementById('theme-icon'),
       payloadList: document.getElementById('payload-list'),
@@ -268,6 +273,7 @@ class App {
       // Save modal
       saveModal: document.getElementById('save-modal'),
       saveNameInput: document.getElementById('save-name-input'),
+      saveFilenamePreview: document.getElementById('save-filename-preview'),
       saveCancelBtn: document.getElementById('save-cancel-btn'),
       saveConfirmBtn: document.getElementById('save-confirm-btn'),
 
@@ -591,6 +597,52 @@ class App {
   // Sidebar
   toggleSidebar() {
     this.el.mainContent.classList.toggle('sidebar-collapsed');
+  }
+
+  initResize() {
+    const handle = this.el.resizeHandle;
+    const panelLeft = this.el.panelLeft;
+
+    // Restore persisted width
+    const savedWidth = localStorage.getItem('sidebar-width');
+    if (savedWidth) {
+      const w = parseInt(savedWidth, 10);
+      if (w >= 150 && w <= 500) {
+        panelLeft.style.setProperty('--sidebar-width', w + 'px');
+      }
+    }
+
+    handle.addEventListener('mousedown', (e) => {
+      if (this.el.mainContent.classList.contains('sidebar-collapsed')) return;
+      e.preventDefault();
+      this._isResizing = true;
+      this._resizeStartX = e.clientX;
+      this._resizeStartWidth = panelLeft.getBoundingClientRect().width;
+      panelLeft.classList.add('resizing');
+      handle.classList.add('active');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!this._isResizing) return;
+      const delta = e.clientX - this._resizeStartX;
+      const newWidth = Math.max(150, Math.min(500, this._resizeStartWidth + delta));
+      panelLeft.style.setProperty('--sidebar-width', newWidth + 'px');
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!this._isResizing) return;
+      this._isResizing = false;
+      panelLeft.classList.remove('resizing');
+      handle.classList.remove('active');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      const currentWidth = panelLeft.getBoundingClientRect().width;
+      if (currentWidth > 0) {
+        localStorage.setItem('sidebar-width', Math.round(currentWidth));
+      }
+    });
   }
 
   // App Switcher
@@ -1237,9 +1289,27 @@ class App {
   }
 
   // Save
+  toFilename(displayName) {
+    return displayName
+      .trim()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+  }
+
+  updateFilenamePreview() {
+    const filename = this.toFilename(this.el.saveNameInput.value);
+    this.el.saveFilenamePreview.textContent = filename
+      ? `Saves as: ${filename}.json`
+      : '';
+  }
+
   openSaveModal() {
-    this.el.saveNameInput.value = this.isNewPayload ? 'new_task' :
-        (this.selectedPayload?.replace('.json', '') + '_copy') || 'task';
+    const rawName = this.isNewPayload ? 'new task' :
+        (this.selectedPayload?.replace('.json', '').replace(/_/g, ' ') + ' copy') || 'task';
+    this.el.saveNameInput.value = rawName;
+    this.updateFilenamePreview();
     this.el.saveModal.classList.add('active');
     this.el.saveNameInput.focus();
     this.el.saveNameInput.select();
@@ -1247,6 +1317,7 @@ class App {
 
   closeSaveModal() {
     this.el.saveModal.classList.remove('active');
+    this.el.saveFilenamePreview.textContent = '';
   }
 
   async update() {
@@ -1330,10 +1401,10 @@ class App {
   }
 
   async save() {
-    const name = this.el.saveNameInput.value.trim();
+    const name = this.toFilename(this.el.saveNameInput.value);
     if (!name) return;
 
-    const fileName = name.endsWith('.json') ? name : `${name}.json`;
+    const fileName = `${name}.json`;
     const instructionMatchesMaster = this.instructionMatchesMaster();
 
     try {
@@ -1799,6 +1870,7 @@ class App {
     this.el.saveNameInput.addEventListener('keypress', e => {
       if (e.key === 'Enter') this.save();
     });
+    this.el.saveNameInput.addEventListener('input', () => this.updateFilenamePreview());
 
     // Provider picker
     this.el.providerTrigger.addEventListener('click', () => {
@@ -1888,6 +1960,9 @@ class App {
         }
       }
     });
+
+    // Initialize panel resize
+    this.initResize();
   }
 }
 
